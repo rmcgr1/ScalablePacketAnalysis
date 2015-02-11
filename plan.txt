@@ -1,0 +1,14 @@
+
+Install list for VMs:
+ 
+tshark
+editcap
+ngrep
+rsync (builtin)
+
+VM System Requirements
+256 Ram
+5 Gb disk
+
+
+
