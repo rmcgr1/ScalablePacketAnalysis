@@ -3,10 +3,33 @@
 usage = """shakedown.
 
 Usage:
-   shakedown distribute FILES ... hosts HOST ... 
-   shakedown command <command>
-   shakedown clean hosts <hostlist>
-   shakedown test FILES ...
+   shakedown distribute --user <username> --host <host>... <files>...
+   shakedown command --user <username> --host <host>... <command>
+   shakedown clean --user <username> --host <host>...
+
+Options:
+
+--host <host>         Hostname or IP address.
+--user <username>     Username to ssh 
+
+Example:
+
+Note! It is requrired to set up password-less ssh with the different nodes!
+
+distribute capture files to drones:
+shakedown distribute --user user --host 192.168.1.100 --host 192.168.1.101 capture1.pcap capture2.pcap
+
+run commands:
+shakedown command --user user --host 192.168.1.100 --host 192.168.1.101 "tshark fields -e ip.src -e dns.qry.name -Y 'dns.flags.response eq 0'"
+
+remove transfered files from nodes:
+shakedown clean --user user --host 192.168.1.100 --host 192.168.1.101 
+
+
+Config file?
+Using Master?
+Specify working dirs?
+
 
 """
 
@@ -31,10 +54,9 @@ from docopt import docopt
 
 
 # TODO cover for trailing slash
-CAPTURE_DIR = "./captures/"
+#CAPTURE_DIR = "./captures/"
 DRONE_DIR = "/tmp/packet_analysis/"
-SSH_USER = "user"
-HOST_LIST = ['192.168.2.100', '192.168.2.101', '192.168.2.102', '192.168.2.103']
+#HOST_LIST = ['192.168.2.100', '192.168.2.101', '192.168.2.102', '192.168.2.103']
 
 class Drone:
     def __init__(self, ipaddress):
@@ -69,11 +91,11 @@ def setup(d):
     d.freespace = int(stdout.read())
 
 
-def getSSHConn(d):
+def getSSHConn(d, ssh_user):
     try:
         ssh = paramiko.SSHClient()
         ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-        ssh.connect(d.ipaddress, username=SSH_USER)
+        ssh.connect(d.ipaddress, username=ssh_user)
     except paramiko.AuthenticationException:
         print "Authentication failed when connecting to " + str(d.ipaddress)
         raise
@@ -82,11 +104,12 @@ def getSSHConn(d):
         raise
     return ssh
 
-def create_split(drone_list):
-    file_list = []
-    for file in os.listdir(CAPTURE_DIR):
+def create_split(drone_list, file_list):
+    for file in file_list:
         if file.endswith(".pcap"):
-            file_list.append(os.path.abspath(CAPTURE_DIR) + "/" + file)
+            print file
+            #file_list.append(os.path.abspath(CAPTURE_DIR) + "/" + file)
+            file_list.append(file)
 
     # Compute split size
     total_file_size = 0
@@ -206,7 +229,10 @@ def read_existing_files(drone_list):
     return existing_file_list
 
 
-        
+
+def clean_drones(drone_list):
+    for d in drone_list:
+        stdin, stdout, stderr = d.sshconn.exec_command("rm `ls " + DRONE_DIR + " | grep 'chunk'`")
 
 def main():
 
@@ -217,30 +243,41 @@ def main():
 
     arguments = docopt(usage)
     print arguments
-    sys.exit(0)
-    
-    for ip in HOST_LIST:
+
+
+    ssh_user = arguments['--user']
+    host_list = arguments['--host']
+        
+    for ip in host_list:
         # Create Drone
         drone_list.append(Drone(ip))
         
     for d in drone_list:
-        d.sshconn = getSSHConn(d)        
+        d.sshconn = getSSHConn(d, ssh_user)        
         setup(d)
 
 
     # Either clean, distribute or command
 
+    if arguments['distribute']:
+
+        file_list = arguments['<files>']
+        # Prepare captures
+        create_split(drone_list, file_list)
+        transfer_split_files(drone_list, file_list)
+
+        print "[*] Finished transfering files to drones"
+
+
+    if arguments['command']:
+        #cmd = "tshark -r /tmp/packet_analysis/*pcap* -T fields -e ip.src -e dns.qry.name -Y 'dns.flags.response eq 0'"
+        cmd = sanitize_command(arguments['<command>'])
+        distribute_command(drone_list, cmd)
+    
+    if arguments['clean']:
+        clean_drones(drone_list)
         
-    # Prepare captures
-    #create_split(drone_list)
-    transfer_split_files(drone_list)
-
-    print "[*] Finished transfering files to drones"
-
-    cmd = "tshark -r /tmp/packet_analysis/*pcap* -T fields -e ip.src -e dns.qry.name -Y 'dns.flags.response eq 0'"
-    distribute_command(drone_list, cmd)
-    
-    
+        
     # Shut it down
     for d in drone_list:
         d.sshconn.close()
