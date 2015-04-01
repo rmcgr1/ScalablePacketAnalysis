@@ -1,5 +1,7 @@
 #!/bin/bash
 
+# Useage: start|stop or run command...
+
 if [ -z "$1" ]
 then
     exit 0

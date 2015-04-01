@@ -3,14 +3,15 @@
 usage = """shakedown.
 
 Usage:
-   shakedown distribute --user <username> --host <host>... <files>...
-   shakedown command --user <username> --host <host>... <command>
-   shakedown clean --user <username> --host <host>...
+   shakedown distribute [options] --user <username> --host <host>... <files>...
+   shakedown command [options] --user <username> --host <host>... <command>
+   shakedown clean [options] --user <username> --host <host>...
 
 Options:
-
+--verbose
 --host <host>         Hostname or IP address.
 --user <username>     Username to ssh 
+
 
 Example:
 
@@ -21,6 +22,8 @@ shakedown distribute --user user --host 192.168.1.100 --host 192.168.1.101 captu
 
 run commands:
 shakedown command --user user --host 192.168.1.100 --host 192.168.1.101 "tshark fields -e ip.src -e dns.qry.name -Y 'dns.flags.response eq 0'"
+(don't use -r/readfile commands for tcpdump,tshark or -I for ngrep, the program will handle this)
+
 
 remove transfered files from nodes:
 shakedown clean --user user --host 192.168.1.100 --host 192.168.1.101 
@@ -34,11 +37,6 @@ Specify working dirs?
 """
 
 
-
-
-
-
-
 import paramiko
 import sys
 import os
@@ -49,7 +47,7 @@ import Queue
 import threading
 from itertools import cycle
 from docopt import docopt
-
+import pdb
 
 
 
@@ -57,6 +55,7 @@ from docopt import docopt
 #CAPTURE_DIR = "./captures/"
 DRONE_DIR = "/tmp/packet_analysis/"
 #HOST_LIST = ['192.168.2.100', '192.168.2.101', '192.168.2.102', '192.168.2.103']
+VERBOSE = False
 
 class Drone:
     def __init__(self, ipaddress):
@@ -67,6 +66,7 @@ class Drone:
 '''
 TODO:
 
+error handling
 use master too
 modify command to strip out -r, -w, -I
 recieve result
@@ -100,16 +100,19 @@ def getSSHConn(d, ssh_user):
         print "Authentication failed when connecting to " + str(d.ipaddress)
         raise
     except:
-        print "Could not SSH to waiting for it to start" + str(d.ipaddress)
+        print "Could not SSH to " + str(d.ipaddress)
         raise
     return ssh
 
 def create_split(drone_list, file_list):
+    chunked_file_list = []
+    
     for file in file_list:
+        # TODO enforce file type?
         if file.endswith(".pcap"):
             print file
             #file_list.append(os.path.abspath(CAPTURE_DIR) + "/" + file)
-            file_list.append(file)
+            #file_list.append(file)
 
     # Compute split size
     total_file_size = 0
@@ -125,13 +128,16 @@ def create_split(drone_list, file_list):
     least_free_space = least_free_space * .85
     number_of_drones = len(drone_list)
 
-    print str(least_free_space)
-    print str(total_file_size / number_of_drones)
+    if VERBOSE:
+        print "Least amount of free disk space on drones (bytes): " + str(least_free_space)
+        print "Make chunks of size (bytes): " + str(total_file_size / number_of_drones)
     max_chunk_file_size = total_file_size / number_of_drones
     
     if (total_file_size / number_of_drones) < least_free_space:
         # Good to go
-        print "Good to seperate files upto this size: " + str(total_file_size / number_of_drones)
+        if VERBOSE:
+            print "Good to seperate files upto this size: " + str(total_file_size / number_of_drones)
+            
 
         # Have to get the size of each chunk, especially if ealing with multiple various sized files
         # Punting on problem by splitting each file into 1/numofdrones
@@ -149,27 +155,38 @@ def create_split(drone_list, file_list):
     else:
         print "[!] Error: not enough free space on drones"
         print "TODO handle this"
+        sys.exit(1)
 
+    # Get list of chunked files
+    for i in file_list:
+        for fname in os.listdir(os.path.dirname(i)):
+            if "chunk" in fname:
+                chunked_file_list.append(fname)
+
+    return chunked_file_list
+        
 def split(file_list, nodes, split_size, max_size):
     for f in file_list:
         file_size = 0
         packet_size_average = 0
         number_of_packets = 0
 
-        subprocess.check_call(["tcpdump", "-r", f, "-w", f + "-chunk", "-C", split_size], stdout=subprocess.PIPE)
+        try:
+            subprocess.check_call(["tcpdump", "-r", f, "-w", f + "-chunk", "-C", split_size], stdout=subprocess.PIPE)
+        except:
+            print "[!] Error: tcpdump couldn't split " + f
+            sys.exit(1)
 
-def transfer_split_files(drone_list):
+def transfer_split_files(drone_list, chunked_file_list):
     # Transfer the list of "chunked" files to drones and master
     worker_pool = cycle(drone_list)
 
     distributed_files = read_existing_files(drone_list)
     
     # TODO Check free space??
-    for file in os.listdir(CAPTURE_DIR):
+    for fname in chunked_file_list:
 
-        if "chunk" in file:
-
-            if [file, str(os.path.getsize(CAPTURE_DIR + file))] in distributed_files:
+            if [fname, str(os.path.getsize(fname))] in distributed_files:
                 # This file is already out on a drone
                 continue
                            
@@ -178,7 +195,7 @@ def transfer_split_files(drone_list):
             # reserve file for Master
             # d.filelist.append(file)
             #else:
-            subprocess.check_call(["rsync", "-avz", "-e", "ssh", CAPTURE_DIR + file, SSH_USER + "@" + d.ipaddress + ":" + DRONE_DIR], stdout=subprocess.PIPE)
+            subprocess.check_call(["rsync", "-avz", "-e", "ssh", fname, SSH_USER + "@" + d.ipaddress + ":" + DRONE_DIR], stdout=subprocess.PIPE)
             d.filelist.append(file)
 
     # TODO get master in drone list
@@ -224,6 +241,8 @@ def read_existing_files(drone_list):
     for d in drone_list:
         stdin, stdout, stderr = d.sshconn.exec_command("ls -l " + DRONE_DIR + " | grep 'chunk' | awk '{print $9, $5}'")
         result = stdout.read()
+        if result == '':
+            continue
         existing_file_list.append([result.split()[0], result.split()[1]])
 
     return existing_file_list
@@ -247,7 +266,8 @@ def main():
 
     ssh_user = arguments['--user']
     host_list = arguments['--host']
-        
+    VERBOSE = arguments['--verbose']
+    
     for ip in host_list:
         # Create Drone
         drone_list.append(Drone(ip))
@@ -263,10 +283,11 @@ def main():
 
         file_list = arguments['<files>']
         # Prepare captures
-        create_split(drone_list, file_list)
-        transfer_split_files(drone_list, file_list)
+        chunked_file_list = create_split(drone_list, file_list)
+        transfer_split_files(drone_list, chunked_file_list)
 
-        print "[*] Finished transfering files to drones"
+        if VERBOSE:
+            print "[*] Finished transfering files to drones"
 
 
     if arguments['command']:
