@@ -8,6 +8,7 @@ Usage:
    shakedown clean [options] --user <username> --host <host>...
 
 Options:
+--name <name>         Execute commands only on files that have been distributed that contain <name>, default is to process all distributed files 
 --verbose
 --host <host>         Hostname or IP address.
 --user <username>     Username to ssh 
@@ -21,8 +22,8 @@ distribute capture files to drones:
 shakedown distribute --user user --host 192.168.1.100 --host 192.168.1.101 capture1.pcap capture2.pcap
 
 run commands:
-shakedown command --user user --host 192.168.1.100 --host 192.168.1.101 "tshark fields -e ip.src -e dns.qry.name -Y 'dns.flags.response eq 0'"
-(don't use -r/readfile commands for tcpdump,tshark or -I for ngrep, the program will handle this)
+shakedown command --user user --host 192.168.1.100 --host 192.168.1.101 "tshark -T fields -e ip.src -e dns.qry.name -Y 'dns.flags.response eq 0'"
+(don't use -r (readfile) commands for tcpdump,tshark or -I for ngrep, the program will handle this)
 
 
 remove transfered files from nodes:
@@ -33,6 +34,8 @@ Config file?
 Using Master?
 Specify working dirs?
 
+./sshcontrol.py distribute --verbose --user user --host 192.168.2.100 --host 192.168.2.101 --host 192.168.2.102 --host 192.168.2.103 ./captures/maccdc2012_00016.pcap
+./sshcontrol.py command  --verbose --user user --host 192.168.2.100 --host 192.168.2.101 --host 192.168.2.102 --host 192.168.2.103 "tshark -T fields -e ip.src -e dns.qry.name -Y 'dns.flags.response eq 0'"
 
 """
 
@@ -63,15 +66,19 @@ class Drone:
         self.freespace = None
         self.sshconn = None
         self.filelist = []
+        self.ssh_user = None
 '''
 TODO:
 
+out of mem issue
 error handling
+config file?
 use master too
-modify command to strip out -r, -w, -I
+progress of individual nodes
 recieve result
-error handling
+error handling - especially distributing the command to dronesb
 survey nodes for existing files with hash
+large files chop to 50 mb and run with that
 '''
 
 def setup(d):
@@ -107,13 +114,6 @@ def getSSHConn(d, ssh_user):
 def create_split(drone_list, file_list):
     chunked_file_list = []
     
-    for file in file_list:
-        # TODO enforce file type?
-        if file.endswith(".pcap"):
-            print file
-            #file_list.append(os.path.abspath(CAPTURE_DIR) + "/" + file)
-            #file_list.append(file)
-
     # Compute split size
     total_file_size = 0
     for i in file_list:
@@ -129,8 +129,8 @@ def create_split(drone_list, file_list):
     number_of_drones = len(drone_list)
 
     if VERBOSE:
-        print "Least amount of free disk space on drones (bytes): " + str(least_free_space)
-        print "Make chunks of size (bytes): " + str(total_file_size / number_of_drones)
+        print "[*] Least amount of free disk space on drones (bytes): " + str(least_free_space)
+        print "[*] Make chunks of size (bytes): " + str(total_file_size / number_of_drones)
     max_chunk_file_size = total_file_size / number_of_drones
     
     if (total_file_size / number_of_drones) < least_free_space:
@@ -161,7 +161,7 @@ def create_split(drone_list, file_list):
     for i in file_list:
         for fname in os.listdir(os.path.dirname(i)):
             if "chunk" in fname:
-                chunked_file_list.append(fname)
+                chunked_file_list.append(os.path.join(os.path.dirname(i),fname))
 
     return chunked_file_list
         
@@ -182,21 +182,25 @@ def transfer_split_files(drone_list, chunked_file_list):
     worker_pool = cycle(drone_list)
 
     distributed_files = read_existing_files(drone_list)
+    if VERBOSE:
+        print "[*] Already distributed files: " + str(distributed_files)
     
     # TODO Check free space??
     for fname in chunked_file_list:
 
-            if [fname, str(os.path.getsize(fname))] in distributed_files:
-                # This file is already out on a drone
-                continue
+        if [fname.split('/')[-1], str(os.path.getsize(fname))] in distributed_files:
+            # This file is already out on a drone
+            continue
                            
-            d = worker_pool.next()
+        d = worker_pool.next()
             # if d.ipaddress == "127.0.0.1":
             # reserve file for Master
             # d.filelist.append(file)
             #else:
-            subprocess.check_call(["rsync", "-avz", "-e", "ssh", fname, SSH_USER + "@" + d.ipaddress + ":" + DRONE_DIR], stdout=subprocess.PIPE)
-            d.filelist.append(file)
+        if VERBOSE:
+            print "[*] transfering " + fname + " to " + d.ipaddress
+        subprocess.check_call(["rsync", "-avz", "-e", "ssh", fname, d.ssh_user + "@" + d.ipaddress + ":" + DRONE_DIR], stdout=subprocess.PIPE)
+        d.filelist.append(file)
 
     # TODO get master in drone list
     #for d in drone_list:
@@ -205,7 +209,9 @@ def transfer_split_files(drone_list, chunked_file_list):
 
 def send_command(drone, cmd, q):
     stdin, stdout, stderr = drone.sshconn.exec_command(cmd)
+    print "sent command " + str(drone.ipaddress)
     result = stdout.read()
+    print "recieved soemthing" + str(drone.ipaddress)
     q.put(result)
 
         
@@ -222,7 +228,6 @@ def distribute_command(drone_list, cmd):
         t.join()
         
     result = []
-    print "here"
     
     while not q.empty():
         try:
@@ -247,14 +252,29 @@ def read_existing_files(drone_list):
 
     return existing_file_list
 
+def sanitize_command(cmd, name = None):
+    # Remove -r for tcpdump/tshark and -I for ngrep
+    if "-r" in cmd or "-I" in cmd:
+        print "[!] Error, do not use -r or -I to designate a file, use --name"
+        sys.exit(1)
 
+    # TODO include support for ngrep here"
+    # TODO catch writing, capturing behavor??
+    if name == None:
+        cmd = "find " + DRONE_DIR + " -iname '*chunk*' -type f -print0 | xargs -0 -I % " + cmd + " -r %"
+    else:
+        cmd = "find " + DRONE_DIR + " -iname '*" + name + "*chunk*' -type f -print0 | xargs -0 -I % " + cmd + " -r %"
 
+    return cmd
+    
+    
 def clean_drones(drone_list):
     for d in drone_list:
         stdin, stdout, stderr = d.sshconn.exec_command("rm `ls " + DRONE_DIR + " | grep 'chunk'`")
 
 def main():
-
+    global VERBOSE
+    
     # interface of distribute, command, clear
    
     drone_list = []
@@ -273,8 +293,10 @@ def main():
         drone_list.append(Drone(ip))
         
     for d in drone_list:
-        d.sshconn = getSSHConn(d, ssh_user)        
+        d.sshconn = getSSHConn(d, ssh_user)
+        d.ssh_user = ssh_user
         setup(d)
+    print "done with drone setup"
 
 
     # Either clean, distribute or command
@@ -292,7 +314,20 @@ def main():
 
     if arguments['command']:
         #cmd = "tshark -r /tmp/packet_analysis/*pcap* -T fields -e ip.src -e dns.qry.name -Y 'dns.flags.response eq 0'"
-        cmd = sanitize_command(arguments['<command>'])
+
+        if VERBOSE:
+            distributed_files = read_existing_files(drone_list)
+            print "[*] Already distributed files: " + str(distributed_files)
+
+
+        if arguments['--name'] is None:
+            cmd = sanitize_command(arguments['<command>'])
+        else:
+            cmd = sanitize_command(arguments['<command>'], arguments['--name'])
+
+        if VERBOSE:
+            print "[*] Sending command to drones: " + cmd
+
         distribute_command(drone_list, cmd)
     
     if arguments['clean']:
