@@ -51,7 +51,7 @@ import threading
 from itertools import cycle
 from docopt import docopt
 import pdb
-
+import timeit
 
 
 # TODO cover for trailing slash
@@ -67,6 +67,7 @@ class Drone:
         self.sshconn = None
         self.filelist = []
         self.ssh_user = None
+        self.freemem = None
 '''
 TODO:
 
@@ -81,7 +82,19 @@ survey nodes for existing files with hash
 large files chop to 50 mb and run with that
 '''
 
-def setup(d):
+def setup_drone(d, ssh_user):
+    d.ssh_user = ssh_user
+    try:
+        d.sshconn = paramiko.SSHClient()
+        d.sshconn.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        d.sshconn.connect(d.ipaddress, username=d.ssh_user)
+    except paramiko.AuthenticationException:
+        print "Authentication failed when connecting to " + str(d.ipaddress)
+        raise
+    except:
+        print "Could not SSH to " + str(d.ipaddress)
+        raise
+
     # See if the right programs are installed
     needed_programs = ['tshark', 'editcap', 'ngrep', 'rsync']
     
@@ -97,19 +110,13 @@ def setup(d):
     stdin, stdout, stderr = d.sshconn.exec_command("df -B1 /tmp | tail -n +2 | awk '{print$4}'")
     d.freespace = int(stdout.read())
 
+    # Get Available Memory
+    stdin, stdout, stderr = d.sshconn.exec_command("free -m | grep 'Mem:' | awk '{print$2}'")
+    d.freemem = int(stdout.read())
 
-def getSSHConn(d, ssh_user):
-    try:
-        ssh = paramiko.SSHClient()
-        ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-        ssh.connect(d.ipaddress, username=ssh_user)
-    except paramiko.AuthenticationException:
-        print "Authentication failed when connecting to " + str(d.ipaddress)
-        raise
-    except:
-        print "Could not SSH to " + str(d.ipaddress)
-        raise
-    return ssh
+####
+# Distributing Files
+####
 
 def create_split(drone_list, file_list):
     chunked_file_list = []
@@ -124,6 +131,8 @@ def create_split(drone_list, file_list):
     for d in drone_list:
         if least_free_space > d.freespace:
             least_free_space = d.freespace
+
+    # Lets start with no file larger than 
             
     least_free_space = least_free_space * .85
     number_of_drones = len(drone_list)
@@ -131,7 +140,10 @@ def create_split(drone_list, file_list):
     if VERBOSE:
         print "[*] Least amount of free disk space on drones (bytes): " + str(least_free_space)
         print "[*] Make chunks of size (bytes): " + str(total_file_size / number_of_drones)
+
     max_chunk_file_size = total_file_size / number_of_drones
+
+
     
     if (total_file_size / number_of_drones) < least_free_space:
         # Good to go
@@ -141,15 +153,12 @@ def create_split(drone_list, file_list):
 
         # Have to get the size of each chunk, especially if ealing with multiple various sized files
         # Punting on problem by splitting each file into 1/numofdrones
-        '''
-        A - 50 mb
-        B - 10 mb
-        C - 100 mb
-        
-        total 160mb / 2 nodes = 80mb per node, 
-        '''
         # TODO this math is way off
         split_size = str((total_file_size / number_of_drones) / 6)
+
+        print "Potentially fix this; setting file size to 25 MB chunks"
+        split_size  = 25
+
         split(file_list, number_of_drones, split_size, max_chunk_file_size) 
     
     else:
@@ -170,14 +179,15 @@ def split(file_list, nodes, split_size, max_size):
         file_size = 0
         packet_size_average = 0
         number_of_packets = 0
-
         try:
-            subprocess.check_call(["tcpdump", "-r", f, "-w", f + "-chunk", "-C", split_size], stdout=subprocess.PIPE)
+            subprocess.check_call(["tcpdump", "-r", f, "-w", f + "-chunk", "-C", str(split_size)], stdout=subprocess.PIPE)
         except:
             print "[!] Error: tcpdump couldn't split " + f
             sys.exit(1)
 
 def transfer_split_files(drone_list, chunked_file_list):
+    # TODO Thread this
+    
     # Transfer the list of "chunked" files to drones and master
     worker_pool = cycle(drone_list)
 
@@ -206,12 +216,34 @@ def transfer_split_files(drone_list, chunked_file_list):
     #for d in drone_list:
     #    print d.ipaddress + " " + str(d.filelist)
 
+    
+# Remove files to be transfered if they exist out on a drone
+def read_existing_files(drone_list):
+    #check name and size and remove from file list to distribute
+    existing_file_list = []
+    
+    for d in drone_list:
+        stdin, stdout, stderr = d.sshconn.exec_command("ls -l " + DRONE_DIR + " | grep 'chunk' | awk '{print $9, $5}'")
+        result = stdout.read()
+        if result == '':
+            continue
+        for i in result.split('\n'):
+            if i is not '':
+                existing_file_list.append([i.split()[0], i.split()[1]])
 
+    return existing_file_list
+
+
+####
+# Command Distribution 
+####
+    
 def send_command(drone, cmd, q):
     stdin, stdout, stderr = drone.sshconn.exec_command(cmd)
+    start_time = timeit.default_timer()
     print "sent command " + str(drone.ipaddress)
     result = stdout.read()
-    print "recieved soemthing" + str(drone.ipaddress)
+    print "recieved " + str(drone.ipaddress) + "in " + str(timeit.default_timer() - start_time)
     q.put(result)
 
         
@@ -236,21 +268,9 @@ def distribute_command(drone_list, cmd):
             pass
 
     for i in result:
-        print i
+        pass
+        #print i
 
-# Remove files to be transfered if they exist out on a drone
-def read_existing_files(drone_list):
-    #check name and size and remove from file list to distribute
-    existing_file_list = []
-    
-    for d in drone_list:
-        stdin, stdout, stderr = d.sshconn.exec_command("ls -l " + DRONE_DIR + " | grep 'chunk' | awk '{print $9, $5}'")
-        result = stdout.read()
-        if result == '':
-            continue
-        existing_file_list.append([result.split()[0], result.split()[1]])
-
-    return existing_file_list
 
 def sanitize_command(cmd, name = None):
     # Remove -r for tcpdump/tshark and -I for ngrep
@@ -260,18 +280,32 @@ def sanitize_command(cmd, name = None):
 
     # TODO include support for ngrep here"
     # TODO catch writing, capturing behavor??
+    '''
     if name == None:
         cmd = "find " + DRONE_DIR + " -iname '*chunk*' -type f -print0 | xargs -0 -I % " + cmd + " -r %"
     else:
         cmd = "find " + DRONE_DIR + " -iname '*" + name + "*chunk*' -type f -print0 | xargs -0 -I % " + cmd + " -r %"
+    '''
 
-    return cmd
+    if name == None:
+        cmd = "for i in `find " + DRONE_DIR + " | grep 'chunk'`; do " + cmd + " -r $i; done"
+    else:
+        cmd = "for i in `find " + DRONE_DIR + " | grep '*" + name +"*chunk'`; do " + cmd + " -r $i; done"
     
+    return cmd
+
+###
+# Deleteing Files
+###
     
 def clean_drones(drone_list):
     for d in drone_list:
         stdin, stdout, stderr = d.sshconn.exec_command("rm `ls " + DRONE_DIR + " | grep 'chunk'`")
 
+####
+# Main 
+####
+        
 def main():
     global VERBOSE
     
@@ -291,12 +325,25 @@ def main():
     for ip in host_list:
         # Create Drone
         drone_list.append(Drone(ip))
-        
+
+    print "starting drone setup"
+    # Threaded setup
+    thread_list = []
     for d in drone_list:
-        d.sshconn = getSSHConn(d, ssh_user)
-        d.ssh_user = ssh_user
-        setup(d)
-    print "done with drone setup"
+        t = threading.Thread(target=setup_drone, args = (d, ssh_user))
+        t.daemon = True
+        t.start()
+        thread_list.append(t)
+
+    for t in thread_list:
+        t.join()
+
+        #d.sshconn = getSSHConn(d, ssh_user)
+
+        #setup(d)
+
+    if VERBOSE:
+        print "done with drone setup"
 
 
     # Either clean, distribute or command

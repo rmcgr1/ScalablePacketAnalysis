@@ -1,0 +1,204 @@
+\documentclass[final]{union-cs-thesis}
+% Use \documentclass[condensed]{union-cs-thesis} to cause the layout to
+% take fewer pages.  It uses single-spacing instead of double spacing and
+% compresses the front matter. This might be useful as you draft your
+% thesis.
+
+% Use \documentclass[final]{union-cs-thesis} for the final version.
+
+% percent sign starts a comment, goes to end of line
+
+\usepackage{graphicx}
+\usepackage[noend]{algorithmic}
+
+
+\begin{document}
+
+\title{Computer Science Senior Thesis \LaTeX{} template}
+\author{Aaron G. Cass\footnote{Based on an earlier version by John Rieffel}}
+\maketitle
+
+\begin{abstract}
+
+This document provides the basic format and style recommended for a
+Computer Science Senior Design project at Union College.  After a
+brief introduction we illustrate the various sections we recommend, and
+provide brief explanations of their contents.  Parenthetical comments
+provide guidance for content.  Many further tips are included in the
+latex source. (Your abstract should provide a concise
+overview of your thesis: a brief introduction of the problem, a
+summary of the background, a description of your research question, a
+description of your research design and implementation, a summary of
+your results and conclusion. Often, people only read the abstract (and
+captions) of papers!)
+
+\end{abstract}
+
+\tableofcontents %that's all you need!
+\listoffigures %again easy
+\listoftables %as pie
+
+\section{Introduction} % \section* would create section without section
+                       % number.
+
+The Computer Science Thesis is the culmination of your CS
+education at Union College.  By the end of this capstone experience,
+typically winter of your senior year, you will have created and
+implemented your own full-fledged independent research project.  The
+process begins with the CSC497 seminar, in which you continue to
+develop the skills necessary for independent research to which you were
+introduced in your Sophomore Research Seminar (SRS).  The Senior
+thesis serves as a way to document and present your capstone project. 
+
+Typically, each term of your capstone experience includes an intensive
+writing experience, resulting in a substantive final document.  This
+LaTeX template should serve for all three written projects, with only
+modest changes to the template itself.  Descriptions of each term's
+outcomes are as follows:
+
+\begin{itemize}
+\item{CSC 497} A well crafted and fully formed research proposal,
+describing your research question and design methodology.  This
+proposal will also include a comprehensive study of prior work along
+with an annotated bibliography.
+
+\item{CSC 498} A well crafted and finely detailed research design
+document.  This will include elaborations on your paper from 497 (a
+well crafted, motivated and  contextualized research question, and a
+comprehensive study of prior work), as well as improvements to your
+research methods and plans for data acquisition and analysis.
+
+\item{CSC 499} Your Senior Thesis.  This will include elaborations on your
+paper from 498, as well as description and analysis of the data
+gathered during your research.  Your advisor may also ask you to write
+a shorter 8-page paper worthy of submission to an academic conference.
+
+\end{itemize}
+
+We have written this document as a means to formalize and normalize
+written reports across projects and advisors.  {\em This should only
+serve as a guide and template: no matter what, be sure
+to consult with your own project advisor to confirm their specific
+requirements for your thesis!}  After all, they will determine your
+final grade.
+
+(In this section you need to motivate your entire research project.
+What did you work on and why is it important?)
+
+% notice I've given this section a label with the \label command
+\section{Background and Related Work}\label{sec:background}
+
+This can be a section where you contextualize research that others
+have done.  Here are some random citations to get you started.  See
+the .bib file for details.  Trimmer~\cite{trimmer-goqbot}wrote a neat paper about soft
+robots.  Clune {\em et al}~\cite{clune-endless} have done some neat
+work with evolving objects.  Many other people have done cool
+research~\cite{bongard-3d-cppn,Lobo:form}.  Dawkins even wrote a book
+about it~\cite{dawkins:blind}.  Occassionally you'll need to cite a
+web page like the CS Dept's page~\cite{cswebpage}.
+\begin{figure}
+\centering
+\includegraphics[width=2in]{CS_LOGO.pdf}
+\caption{This is the test image caption.  Generally images are first
+saved in PDF or EPS format.  You can use other LaTeX packages (like
+graphicx) for other image
+formats.} \label{fig:cslogo}
+\end{figure}
+
+\section{Methods and Design} \label{sec:methods}
+
+(You might want a section like this, but talk to your advisor about
+the exact format they request).
+
+This guide is written in the LaTeX markup language, and edited in
+emacs (you may use the editor of your choice, of course) and compiled
+using pdflatex.  A Makefile is included in the directory, and is a
+useful way to compile edits.
+
+LaTeX is fantastic for many reasons, but one of my favorite is the
+ability to use labels to refer to figures, sections, formulae, etc.
+For instance I may want to refer to Section~\ref{sec:background} in
+the text here, or maybe to Figure~\ref{fig:cslogo}.  As you add and remove sections and subsections, LaTeX
+intelligently renumbers references accordingly.
+
+See the source code:
+Often you may want to include psuedocode in your thesis.  The {\em
+algorithmic} package can help you with that.  Here is psuedocode for
+compiling your thesis:
+
+%this is using the algorithmic package
+\begin{algorithmic}[1]
+\WHILE{you see compile errors or need to make changes}
+  \STATE edit source in text editor of choice
+  \STATE compile by typing ``make''
+\ENDWHILE
+\end{algorithmic}
+
+Instead, you may want verbatim code in your thesis.  Use this
+sparingly!
+%note spaces work as whitespace, tabs do not
+\begin{verbatim}
+define factorial (n):
+     if (n == 0):
+        return 1
+     else:
+        return n*factorial(n-1)
+\end{verbatim}
+
+(Your methods and design section should describe everything someone
+might need to replicate your experiment, along with explanation of
+design choices along the way).
+
+\section{Another Section}
+
+Often you will perform experiments or human subject studies as part of
+your thesis research.  Here you might describe the {\em actual} experiments
+performed, as opposed to the {\em experimental setup} described in
+section~\ref{sec:methods} above.  Or you may need another section (or
+sections) entirely).
+
+\subsection{a subsection}
+
+Look! we can make subsections!
+
+\subsubsection{a subsubsection}
+
+and sub sub sections!
+
+\paragraph{there are no subsubsubsections}
+
+You may use a paragraph construct instead.
+
+\section{Yet Another Section}
+
+This might be a good place for an example table.  Table \ref{tab:timeline}
+shows a time line for a CS Thesis.  Note that we are writing in {\bf all}
+of the terms --- we are not waiting until the end of the CSC499 to write up
+the thesis.  Note: if you just use a tabular environment outside of a table
+environment, you still get a table, but it will be placed directly in the
+text where you put it, and it will not be shown in the List of Tables.
+
+\begin{table}
+\begin{center}
+\begin{tabular}{r c l}
+{\bf Term} &{\bf Course} &{\bf Aims/Outcomes} \\ \hline
+Junior Spring & CSC497 & Find Advisor, develop ideas\\ 
+&&{\bf A research question and fully formed proposal}\\ \hline
+Senior Fall& CSC498 & Do lots of work and writing\\
+Senior Winter & CSC499 & More work, more writing\\
+&&{\bf A Completed Capstone Design
+Project}\\ \hline
+\end{tabular}
+\end{center}
+\caption{A time line for a CS Thesis\label{tab:timeline}}
+
+\end{table}
+
+
+\section{Final Section}
+
+All good things must come to an end.
+
+\bibliography{thesis}  
+\bibliographystyle{plain}
+\end{document}
