@@ -1,17 +1,37 @@
 Research Paper Notes
 
 
+Distributed Packet Analysis for Minima
+
+
 Abstract
 What’s the problem?
 Why should the reader care?
 What have you accomplished?
 What are the implications? 
 
+Using network packet analyzers on large data sets is problematic due significant resource requirements...
+
+Analyzing large datasets of network traffic is necessary for network defense, intrusion and management.  As the size of a network capture scales past the memory size of a host, analysis is problematic due to larget memore and preocessing requirements to decode network protocols. The packet analyzer wireshark requires //// time as much memory as the capture file.
+
+This system reduces analyzing large network datasets to a "pleasingly parallel" problem that can be distributed to any number of distributed hosts. The performance of this system, demonstrates a speedup of ///.  With repeated queries, the system adapts to a hetrogenous collection of distributed by transfering additional work to high-preforming hosts. 
+
+This approach enables large-scale deep packet inspection...
+
+
 Introduction
 Longer treatment of points in abstract
 What previous work does paper build on?
 emphasize the positive, more than shortcomings
 Pointers to rest of paper 
+
+IDS 
+
+Bro
+
+The ablity to do effiencely mine large datasets of full network captures may lead to a differnt approach in network defense.  While an IDS or NSM  may indicate the presence of an adversary in the network, the ability the mine the full network capture of the adversary will reveal the tatics, the tools, and specpics of the damage done to the network.  With decreasing storage costs, an organization could augment exists security practices of storeing logs with a window/circular buffer of full network capture.
+
+
 
 Body
 Highly variable, choose well
@@ -20,11 +40,31 @@ building on what has come before
 Anticipate readers’ questions and give them
 answers (or tell them when you have none) 
 
+Overview
+
+The main functions of the system are to distribute the packet capture data among the processing nodes and to execute a packet analysis command across the nodes. In the distribute function, the control node splits the network packet captures into chunks which are distributed equally among the processing nodes. The user can repeately distribute a changing set of network and only the difference with what is already out on the processing nodes is transferred.  The command function executes a user specified command for the tshark, ngrep, or tcpdump programs on each processing node against the dstribtued data.
+
+Load balancing algorithm
+
+record times, nodes that take longer, caluclate difference in times and find how many addtional files this difference it represents for each processing node. IF this difference is over a threshold, say 20%, distribute these files  
+
+The system is intended to be used with a large sumber of linux based processing nodes with minimal requirements.  The node the user interacts with is called the control node.  The only requirements for the processing nodes is to have the packet analysis tool installed and that the control node must be able to login into every node with passwordless ssh certificates.  
+
+
+Useage
+
+Performance
+
+
 Related Work
 Be generous in citing others
 do not limit to work that directly influenced paper
 Distinguish your work without bad-mouthing
 the competition 
+
+Related work
+
+An similar effort, "A Hadoop-based Packet Trace Processing Tool"
 
 
 
@@ -33,4 +73,9 @@ Brief recap
 •
 What have you not done?
 •
+A central deficit is that this system is effectively a centralized algorithm... Design choice, central datastore.... The cetralized nature of the system may limit the ability for the system to scale. 
+This effort has not addressed fault tolerance.  A failure of a node will cause incomplete output.  The network files can be re-distributed to functioning nodes, but the running computation will be lost. 
+
 How might others take it further? 
+
+An improvement could be a true decentralized algorithm where nodes could use a gossip-like algorithm to effectively distribute files and tasks.  
