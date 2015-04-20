@@ -1,7 +1,9 @@
 Research Paper Notes
 
+reached: x x
+didn't reach: x x x x x x 
 
-Distributed Packet Analysis for Minima
+Distributed Network Analysis using Minimal Hosts... 
 
 
 Abstract
@@ -12,11 +14,8 @@ What are the implications?
 
 Using network packet analyzers on large data sets is problematic due significant resource requirements...
 
-Analyzing large datasets of network traffic is necessary for network defense, intrusion and management.  As the size of a network capture scales past the memory size of a host, analysis is problematic due to larget memore and preocessing requirements to decode network protocols. The packet analyzer wireshark requires //// time as much memory as the capture file.
+Analyzing network traffic captures is necessary for network defense, intrusion and management. As a network captures increases, analysis requires proporitional memory and processing capacity. A popular network analyzer, wireshark can require --- memory to model the protocol state.  Deep packet inspection.  This paper presents a technique to divide and distribute large packet captures to remote hosts which process and return analytic queries.  The system is designed to run with minimal installation, such as laptops ttransported to a client site, and the system has shown a speedup of .... This allows scaleable network analysis techniquces in a variety of situatiosns such aas incident response in at a short notice. 
 
-This system reduces analyzing large network datasets to a "pleasingly parallel" problem that can be distributed to any number of distributed hosts. The performance of this system, demonstrates a speedup of ///.  With repeated queries, the system adapts to a hetrogenous collection of distributed by transfering additional work to high-preforming hosts. 
-
-This approach enables large-scale deep packet inspection...
 
 
 Introduction
@@ -25,11 +24,41 @@ What previous work does paper build on?
 emphasize the positive, more than shortcomings
 Pointers to rest of paper 
 
+
+High-impact network instrusions into large corporations have increased the importance of securing netowrks and when the inevitable network intrusion occurs, knowing exactly where, when, and what has been compromised is critical. With increased preformance of networks, the volume of traffic obscures a small malicitous event. Multiple approaches have been develeoped. One is to create netflows of network traffic. Netflows are brief summaries of the metatadata of network events, such as source and destination IP addresses.  This reduces the volume of data, but signfigant loss /// compared to deep packet inspection. Netflow flogs can be preformance intesive to search through and techniques from lee, yeonhee and RIPE-CC both use an Hadoop-based approach to distribute netflow analysis among a number of hosts.  Another approach to distributed network analytics is run a distributed intrusion detection system (IDS) such as snort or bro.  These tools scan network traffic for known patterns, or signatures, and warn of malicious activity.  Multiple IDSes can be deployed and forward warnings to a central server.  ____ describe methods to sort .    
+
+These approaches are effective for well known or structured network analytics.  When deep analytics are needed for identifying new threats, zero-day attacks,     Even if it is known exactly what to look for inside of a packet capture, sorting through the volume. ...   Packet analyzers interpret interpret show    
+
+weakness of signature based IDS, you have to know what you're looking for
+
+
+This system reduces analyzing large network datasets to a "pleasingly parallel" problem that can be distributed to any number of distributed hosts. The performance of this system, demonstrates a speedup of ///.  With repeated queries, the system adapts to a hetrogenous collection of distributed by transfering additional work to high-preforming hosts. 
+
+This approach enables large-scale deep packet inspection using the right tool for the job.   
+
+
+
+
+
+Thoughts: work requires variety of tools. Enables analysts to use their tools for small-scale analytics to large scale.  Limitations of SQL/RDBMS, can't preform the deep analytics, parsing network traffic into intelligable SQL tables resutls in wasted computation unless previously know exactly what will be needed.  Utilizing own tool approach allows efecient parsing of headers, keyword, and binary signature searches.
+
+
+Wireshark/Tshark
+
+Ngrep
+
+Netflow data
+
 IDS 
 
 Bro
 
 The ablity to do effiencely mine large datasets of full network captures may lead to a differnt approach in network defense.  While an IDS or NSM  may indicate the presence of an adversary in the network, the ability the mine the full network capture of the adversary will reveal the tatics, the tools, and specpics of the damage done to the network.  With decreasing storage costs, an organization could augment exists security practices of storeing logs with a window/circular buffer of full network capture.
+
+Hadoop based systems
+
+SQL
+
 
 
 
@@ -74,8 +103,13 @@ Brief recap
 What have you not done?
 •
 A central deficit is that this system is effectively a centralized algorithm... Design choice, central datastore.... The cetralized nature of the system may limit the ability for the system to scale. 
-This effort has not addressed fault tolerance.  A failure of a node will cause incomplete output.  The network files can be re-distributed to functioning nodes, but the running computation will be lost. 
+This effort has not addressed reslizance to task failures.  A failure of a node will cause incomplete output.  The network files can be re-distributed to functioning nodes, but the running computation will be lost. 
 
 How might others take it further? 
 
 An improvement could be a true decentralized algorithm where nodes could use a gossip-like algorithm to effectively distribute files and tasks.  
+
+Hardware limitations - all results hampered due to running on limited number of VMs. Not definitively answered the question of if this approach would scale.  
+
+Commerical cloud aspect - spin up aws nodes
+modify for snort, bro.  clustered implemnations exists, but this concept could be extended to create a readymade image of network intrusion tools to be deployed as needed.

@@ -1,0 +1,41 @@
+https://labs.ripe.net/Members/wnagele/large-scale-pcap-data-analysis-using-apache-hadoop
+
+OK, seriously; why would you use one of the most bloated, low-performing high-level languages known to man to process PCAP-data when you have close to perfect C-libraries (like libtrace) available? What you gain by doing this your way, unless I'm missing something fundemental, is:
+1. Extremly poor performance (100GB data in 3 minutes is OK with 1 thread, you have 100 threads?!?! That is /1 GB DATA PER 3 MINUTES/!!! You could use Excel to achieve this...)
+2. You have to support your own bloated code, whilst libtrace is free to use.
+3. Losing face by telling people you can process 1 GB data in 3 minutes when this is something that could be done 10 years ago in a lower level language.
+
+
+The power of this system for us really comes at scale - we use libtrace, libpcap, etc. extensively and will continue to do so. For us it is very useful to be able to iterate over TBs of data within a reasonable amount of time and being able to lower that time by simply adding computing capacity. With libtrace our only way of scaling was vertical and if we reached that limit we had to compute batches on different machines and later merge those results into one which was an error-prone process. 
+
+
+Toward Scalable Internet Traffic Measurement and Analysis with Hadoop
+http://www.sigcomm.org/sites/default/files/ccr/papers/2013/January/2427036-2427038.pdf
+
+Presentation: Scalable NetFlow Analysis with Hadoop
+http://www.cert.org/flocon/2013/presentations/lee-yeonhee-scalable-netflow-analysis-hadoop.pdf
+
+Netflow analysis, not deep-packet inspection. Fitlering rules, not full freedom of wireshark...  Substantial overhead of setup of Map-reduce? 
+
+Packet-pig
+https://github.com/packetloop/packetpig
+http://hortonworks.com/blog/big-data-security-part-one-introducing-packetpig/
+Never-before-seen concept - http://www.ranum.com/security/computer_security/code/index.html
+http://www.ranum.com/security/computer_security/code/overwatch_final_draft.pdf
+
+Most intrusion detection systems (IDS) look for signatures of known attacks and identify them in real-time. Packetpig is different. Packetpig analyzes full packet captures 
+
+
+
+Bro-cluster
+https://www.bro.org/sphinx-git/cluster/index.html
+http://ossectools.blogspot.com/2011/09/bro-quickstart-cluster-edition.html
+http://www.ntop.org/products/pf_ring/
+PF-Ring??  Interesting for packet capture
+
+Presentation: Preforming Network and Security Analytics with Hadoop, Travis Dawson
+http://www.slideshare.net/Hadoop_Summit/architecting-business-critical-enterprise-apps
+SQL - Unable to preform the deep zero  or unknown exploits on historical data as new exploits are discovered. Which is to say that Packetpig can determine whether intruders are already in your network, for how long, and what ve stolen or abused.theydayanalytics needed! Unstructured data
+
+
+
