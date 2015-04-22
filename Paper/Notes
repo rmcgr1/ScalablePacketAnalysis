@@ -3,7 +3,7 @@ Research Paper Notes
 reached: x x
 didn't reach: x x x x x x 
 
-Distributed Network Analysis using Minimal Hosts... 
+Large Scale Network Analysis using Distributed Minimal Hosts... 
 
 
 Abstract
@@ -14,7 +14,7 @@ What are the implications?
 
 Using network packet analyzers on large data sets is problematic due significant resource requirements...
 
-Analyzing network traffic captures is necessary for network defense, intrusion and management. As a network captures increases, analysis requires proporitional memory and processing capacity. A popular network analyzer, wireshark can require --- memory to model the protocol state.  Deep packet inspection.  This paper presents a technique to divide and distribute large packet captures to remote hosts which process and return analytic queries.  The system is designed to run with minimal installation, such as laptops ttransported to a client site, and the system has shown a speedup of .... This allows scaleable network analysis techniquces in a variety of situatiosns such aas incident response in at a short notice. 
+Analyzing network traffic captures is necessary for network defense, intrusion and management. Analysis of large network captures requires proporitional memory and processing capacity. A popular network analyzer, wireshark can require --- memory to model the protocol state.  Deep packet inspection. The memory requirA single hosts may not be feasible to preform deep packet inspection within a multi-gigabyte capture file   This paper presents a technique to divide and distribute large packet captures to remote hosts which process and return analytic queries.  The system is designed to run with minimal installation, such as laptops ttransported to a client site, and the system has shown a speedup of .... This allows scaleable network analysis techniquces in a variety of situatiosns such aas incident response in at a short notice. 
 
 
 
@@ -25,7 +25,22 @@ emphasize the positive, more than shortcomings
 Pointers to rest of paper 
 
 
-High-impact network instrusions into large corporations have increased the importance of securing netowrks and when the inevitable network intrusion occurs, knowing exactly where, when, and what has been compromised is critical. With increased preformance of networks, the volume of traffic obscures a small malicitous event. Multiple approaches have been develeoped. One is to create netflows of network traffic. Netflows are brief summaries of the metatadata of network events, such as source and destination IP addresses.  This reduces the volume of data, but signfigant loss /// compared to deep packet inspection. Netflow flogs can be preformance intesive to search through and techniques from lee, yeonhee and RIPE-CC both use an Hadoop-based approach to distribute netflow analysis among a number of hosts.  Another approach to distributed network analytics is run a distributed intrusion detection system (IDS) such as snort or bro.  These tools scan network traffic for known patterns, or signatures, and warn of malicious activity.  Multiple IDSes can be deployed and forward warnings to a central server.  ____ describe methods to sort .    
+When the invitable network intrusion occurs, it is critical to know exactly where, when, and what has been compromised. Packet analyzers, such as the open source wireshark, enable analysts to examine individual packets by understanding the structure of various network protocols and use a filtering syntax preform queries.  These queries, such as listing websites visted, or -- is called deep packet inspection is needed/useful....  However, with the increased preformance of networks, the sheer volume of normal traffic obscures a small malicitous event.  Searching mult-gigabyte arge datasets can overwhelm packet analyzers...
+
+Multiple approaches to mine network data for security threats. have been develeoped. One is to create a summary of the metadata of the network traffic, such as listing source and destination IP addresses. (mention netflow here?)  This reduces the volume of data, but reqires prior knowledge on what is necessary to capture.  An intrusion detection system, such as Snort, scans traffic for pre-defined signatures and issues an alert. The open source Bro network security monitoring system records network state, scans network traffic anonlyms, and is designed to scale for a large network.  Other efforts have translated network data to put network data into a database system to query against. pcap2sql, These approaches can protect a network against known threats, but these lack the flexibility that an analysts would have with a packet analysizer with a small capture of data.  
+
+, or evading the IDS, deep packet inspection is needed.
+
+
+
+Existing efforts have attempted to address this need to analyze large network captures. Network traffic can be split into parrallel workloads for remote hosts to analyze individually.  Techniques from (lee and yeonhee) and (RIPE-CC) both use an Hadoop-based approach to distribute work among a number of hosts.  (lee and yeonhee)'s system injests netflow data and provides statistics while (RIPE-CC)'s system preforms a distributed DNS based analytic and has support for preforming SQL-like queries against the PCAP.  Both systems require the overhead and complexity of a Hadoop system, translation of the network data to an optimized format, and are tailored for a specific analytic uses.  Packetpig works on full network captures and utilizes Hadoop to enable Apache Pig queries against the traffic.  This enables access to specific chunks of network data 
+
+
+This system presented in this paper enables the same tools and techniques used for small-scale packet analysis to be distributed across a number of remote hosts. The goal is to enable multiple command-line packet analysis tools in a lightweight design.   The system is responsible for distributing network data to each host, issuing commands, and collecting the results. The requirements for each host are the analytic tool installed, rsync, and ssh access.  All commands and data transfers are done securely over ssh. This system is intended to be used with hetrogenous hosts.  It optimzes for host differences in repeated queries against the same traffic capture by redistributing the amount of data for each host based on a perforamance metric.  The system is designed to be deployed in a adhoc-manner. For instance, this system can run on a series of laptops transported to a client site to be close to the captured network datas.  Another use case would be to use a commerical cloud provider to add nodes as the amount of network data to search increases.
+
+(repeted queries same data, increasing data, generate output for other analyitcs)
+
+
 
 These approaches are effective for well known or structured network analytics.  When deep analytics are needed for identifying new threats, zero-day attacks,     Even if it is known exactly what to look for inside of a packet capture, sorting through the volume. ...   Packet analyzers interpret interpret show    
 
@@ -34,10 +49,7 @@ weakness of signature based IDS, you have to know what you're looking for
 
 This system reduces analyzing large network datasets to a "pleasingly parallel" problem that can be distributed to any number of distributed hosts. The performance of this system, demonstrates a speedup of ///.  With repeated queries, the system adapts to a hetrogenous collection of distributed by transfering additional work to high-preforming hosts. 
 
-This approach enables large-scale deep packet inspection using the right tool for the job.   
-
-
-
+This approach enables large-scale deep packet inspection using the right tool for the job.
 
 
 Thoughts: work requires variety of tools. Enables analysts to use their tools for small-scale analytics to large scale.  Limitations of SQL/RDBMS, can't preform the deep analytics, parsing network traffic into intelligable SQL tables resutls in wasted computation unless previously know exactly what will be needed.  Utilizing own tool approach allows efecient parsing of headers, keyword, and binary signature searches.
@@ -69,7 +81,7 @@ building on what has come before
 Anticipate readers’ questions and give them
 answers (or tell them when you have none) 
 
-Overview
+Design
 
 The main functions of the system are to distribute the packet capture data among the processing nodes and to execute a packet analysis command across the nodes. In the distribute function, the control node splits the network packet captures into chunks which are distributed equally among the processing nodes. The user can repeately distribute a changing set of network and only the difference with what is already out on the processing nodes is transferred.  The command function executes a user specified command for the tshark, ngrep, or tcpdump programs on each processing node against the dstribtued data.
 
@@ -78,6 +90,9 @@ Load balancing algorithm
 record times, nodes that take longer, caluclate difference in times and find how many addtional files this difference it represents for each processing node. IF this difference is over a threshold, say 20%, distribute these files  
 
 The system is intended to be used with a large sumber of linux based processing nodes with minimal requirements.  The node the user interacts with is called the control node.  The only requirements for the processing nodes is to have the packet analysis tool installed and that the control node must be able to login into every node with passwordless ssh certificates.  
+
+
+Evaluation
 
 
 Useage

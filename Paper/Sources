@@ -17,6 +17,9 @@ http://www.cert.org/flocon/2013/presentations/lee-yeonhee-scalable-netflow-analy
 
 Netflow analysis, not deep-packet inspection. Fitlering rules, not full freedom of wireshark...  Substantial overhead of setup of Map-reduce? 
 
+https://code.google.com/p/pcap2sql/
+SQL-to-Pcap
+
 Packet-pig
 https://github.com/packetloop/packetpig
 http://hortonworks.com/blog/big-data-security-part-one-introducing-packetpig/
