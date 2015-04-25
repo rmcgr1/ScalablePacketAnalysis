@@ -31,11 +31,92 @@ Multiple approaches to mine network data for security threats. have been develeo
 
 Existing efforts have attempted to address this need to analyze large network captures. Network traffic has limited dependcies outside of an established session and can be split into parallel workloads for hosts to analyze individually.  Techniques from (lee and yeonhee) and (RIPE-CC) both use an Hadoop-based approach to distribute work among a number of hosts.  (lee and yeonhee)'s system injests netflow data and provides statistics while (RIPE-CC)'s system preforms a distributed DNS based analytic and has support for preforming SQL-like queries against the PCAP.  Both systems require the overhead and complexity of a Hadoop system, translation of the network data to an optimized format, and are tailored for a specific analytic uses.  Packetpig works on full network captures and utilizes Hadoop to enable Apache Pig queries against the traffic.  This enables access to specific chunks of network data 
 
-This system presented in this paper enables the same tools used for small-scale packet analysis to be utilzed for parallel computation. The goal is to enable repeated network queries against a dataset with a lightweight design. The system is responsible for distributing a portion of the network data to each host, issuing commands, and collecting the results. Each host is required to have the analytic tool installed (tshark, tcpdump, and ngrep are supported), rsync, and ssh access.  All commands are issued over ssh and data transfers use rsync over ssh to compresses data and only transfers files that have changed.  These design principals enable a collection of hetrogenous hosts to rapidly divide a large network capture and run queries issued by a central host.  The central host optimizes for differences in computational node capabilties by redistributing the amount of data each host is responsible for based on a performence metric.  This improves repeated queries to the same, or a growing dataset. 
+This system presented in this paper enables the same tools used for small-scale packet analysis to be utilzed for parallel computation. The goal is to enable repeated network queries against a dataset with a lightweight design. The system is responsible for distributing a portion of the network data to each host, issuing commands, and collecting the results. Each host is required to have the analytic tool installed (tshark, tcpdump, and ngrep are supported), rsync, a bash-like command shell, and SSH (secure shell) access.  All commands are issued over SSH and data transfers use rsync over SSH to compresses data and only transfers files that have changed.  These design principals enable a collection of hetrogenous hosts to rapidly divide a large network capture and run queries issued by a central host.  The central host optimizes for differences in computational node capabilties by redistributing the amount of data each host is responsible for based on a performence metric.  This improves repeated queries to the same, or a growing dataset. 
 
 The system execues queries that are a tshark, tcpdump, or ngrep command.  These tools have a robust filtering syntax that is familiar to many in the network security community.  Buliding upon widely used open-source tools enables reuse of optimized packet processing libaries and support for hundreds of protocols.  Similar efforts that expose a SQL-like interface to query data are forced to translate, custom filter....lose query sytanx.  To match the hundreds of protocols decoded by wireshark, a custom sql-like implementation would have to identify each type of packet that may be of interest.
 
-The system is designed to be a variety of use cases. One approach would be to develop the query on a subset of the data on a single machine.  Once this produces an expected result, this system can be used to quick scale this analytic to run in parallel on multiple hosts.  This system could be used to efficently filter traffic to generate output as for the next step of the analytic. A specific use case is to contruct a system of laptops that can be transported to a client site to be close to the captured network data.  Another use case would be to use a commerical cloud provider to add hosts as the amount of network data to search increases.
+The system is designed to be a variety of use cases. One approach would be to develop the query on a subset of the data on a single machine.  Once this produces an expected result, this system can be used to quick scale this analytic to run in parallel on multiple hosts.  This system could be used to efficently filter traffic to generate output for the next step of the analytic. One method would be to use unix pipes to send the output to common unix tools such as sort, uniq, and count to generate metrics about captured traffice. An another use case is to contruct a system of laptops that can be transported to a client site to be close to the captured network data.  Another use case would be to use a commerical cloud provider to add hosts as the amount of network data to search increases.
+
+
+#####################
+
+
+Body
+Highly variable, choose well
+Logical progression with later sections
+building on what has come before
+Anticipate readers’ questions and give them
+answers (or tell them when you have none) 
+
+Design
+
+The main functions of the system are to distribute the packet capture data among the processing nodes and to execute a packet analysis command across the nodes.  All remote communications utilizes SSH public-private key pairs to provide authentication and a secure channel.  
+
+In the distribute function,  the central node splits the network packet captures into chunks which are distributed equally among the processing nodes.  A capture is split into 25 MB chunks. The chunk size is import in relation to the processing capacity of the host because the memory requirement to process a network capture can be a multiple of the files size on disk (cite wireshark mailing list). This chunk size worked well for the limited resourced VMs used for development.  A downside to a small chunk size is that there is a greater chance that a session is split between chunks which depending on the query could be an issue.  Before files are distributed out to the nodes, the central node queries each node to see what files have already been distributed. The response is used to only transfer files which have changed.  This allows for effecient repeated queries of a dataset that continues to grow. The distribution is made using the rsync program running over SSH, and compressed.     
+
+In the command function, the central node executes a tshark, ngrep, or tcpdump command on each processing node against the distribtued data.  The user provides the same query that would be used locally for these programs except the option to read from a file (-r for tcpdump/tshark and -I for ngrep).  The central node builds a command to execute on the remote hosts consisting of a bash for-loop that runs the specified query against selected chunks of network data. An SSH session is established with each processing node concurrently using the python threading library.  The query command is then executed against each chunk of network data and the output is returned to the central host. The data is collected in a thread-safe data structure and sent to standard output after each node has returned its result.  Order is not maintained through this process as data is returned in order of completeion.  
+
+In the load balancing function, the central moves chunks between poorly performing nodes and high preforming nodes to produce quicker tsk completeion times.  The central node records the task completeion time.  If this time is over a 20% threshold of the completion times of other nodes, the central node calculates how many additonal files ....  implementation.  This balancing accomplishes two goals, depending on the configuration of the computation nodes and the composition of the network data in relation to the query.  With a hetrogenous makeup of  
+
+Load balancing algorithm
+
+record times, nodes that take longer, caluclate difference in times and find how many addtional files this difference it represents for each processing node. IF this difference is over a threshold, say 20%, distribute these files  
+
+
+Evaluation/Performance
+
+
+Useage
+
+
+
+Related Work
+Be generous in citing others
+do not limit to work that directly influenced paper
+Distinguish your work without bad-mouthing
+the competition 
+
+Related work
+
+An similar effort, "A Hadoop-based Packet Trace Processing Tool"
+
+
+
+Summary/Conclusion
+Brief recap
+•
+What have you not done?
+•
+
+
+
+An underlying limitiation is that this system is a centralized algorithm. As the system scales, the central node can becomed overwhelmed with network traffic as it becomes a hotspot with all traffic leaving and returing to it. There are also no provisions of the failure of a node.  A node failure will cause incomplete output.  The network files can be re-distributed to functioning nodes, but the running computation will be lost.
+
+(last para ....> future)
+The ablity to do effiencely mine large datasets of full network captures may lead to a differnt approach in network defense.  While an IDS or NSM  may indicate the presence of an adversary in the network, the ability the mine the full network capture of the adversary will reveal the tatics, the tools, and specpics of the damage done to the network.  With decreasing storage costs, an organization could augment exists security practices of storeing logs with a window/circular buffer of full network capture.
+
+
+
+
+
+Design choice, central datastore.... The cetralized nature of the system may limit the ability for the system to scale. 
+This effort has not addressed reslizance to task failures.
+
+How might others take it further? 
+
+An improvement could be a true decentralized algorithm where nodes could use a gossip-like algorithm to effectively distribute files and tasks.  
+
+Hardware limitations - all results hampered due to running on limited number of VMs. Not definitively answered the question of if this approach would scale.  
+
+Commerical cloud aspect - spin up aws nodes
+modify for snort, bro.  clustered implemnations exists, but this concept could be extended to create a readymade image of network intrusion tools to be deployed as needed.
+
+
+
+
+############
+Notes
+
 
 
 (repeted queries same data, increasing data, generate output for other analyitcs)
@@ -64,68 +145,6 @@ IDS
 
 Bro
 
-The ablity to do effiencely mine large datasets of full network captures may lead to a differnt approach in network defense.  While an IDS or NSM  may indicate the presence of an adversary in the network, the ability the mine the full network capture of the adversary will reveal the tatics, the tools, and specpics of the damage done to the network.  With decreasing storage costs, an organization could augment exists security practices of storeing logs with a window/circular buffer of full network capture.
-
 Hadoop based systems
 
 SQL
-
-#####################
-
-
-Body
-Highly variable, choose well
-Logical progression with later sections
-building on what has come before
-Anticipate readers’ questions and give them
-answers (or tell them when you have none) 
-
-Design
-
-The main functions of the system are to distribute the packet capture data among the processing nodes and to execute a packet analysis command across the nodes. For the distribute function, the control node splits the network packet captures into chunks which are distributed equally among the processing nodes.  Tcpdump is used to split the capture into 25 MB chunks. The chunk size is import in relation to the processing capacity of the host since analysis tools since the memory requirements to can be a multiple of the files size on disk (cite wireshark mailing list). This chunk size worked well for the limited resourced VMs used for development.  One downside to a small chunk length is that there is a greater chance that a session is split among chunks which may be an issue for some analytic queries.  Before files are distributed out to the nodes, the central node queries each node to see what files have already been distributed.  (Query is threaded??) .  The response is used to determine which files do need to be distributed out to the nodes.  The distribution is made using the rsync program.  Rsync can run over SSH, and the same channel is used to distrubute the files.     
-
-The user can repeately distribute a changing set of network and only the difference with what is already out on the processing nodes is transferred.  The command function executes a user specified command for the tshark, ngrep, or tcpdump programs on each processing node against the dstribtued data.
-
-Load balancing algorithm
-
-record times, nodes that take longer, caluclate difference in times and find how many addtional files this difference it represents for each processing node. IF this difference is over a threshold, say 20%, distribute these files  
-
-The system is intended to be used with a large sumber of linux based processing nodes with minimal requirements.  The node the user interacts with is called the control node.  The only requirements for the processing nodes is to have the packet analysis tool installed and that the control node must be able to login into every node with passwordless ssh certificates.  
-
-
-Evaluation
-
-
-Useage
-
-Performance
-
-
-Related Work
-Be generous in citing others
-do not limit to work that directly influenced paper
-Distinguish your work without bad-mouthing
-the competition 
-
-Related work
-
-An similar effort, "A Hadoop-based Packet Trace Processing Tool"
-
-
-
-Summary/Conclusion
-Brief recap
-•
-What have you not done?
-•
-A central deficit is that this system is effectively a centralized algorithm... Design choice, central datastore.... The cetralized nature of the system may limit the ability for the system to scale. 
-This effort has not addressed reslizance to task failures.  A failure of a node will cause incomplete output.  The network files can be re-distributed to functioning nodes, but the running computation will be lost. 
-
-How might others take it further? 
-
-An improvement could be a true decentralized algorithm where nodes could use a gossip-like algorithm to effectively distribute files and tasks.  
-
-Hardware limitations - all results hampered due to running on limited number of VMs. Not definitively answered the question of if this approach would scale.  
-
-Commerical cloud aspect - spin up aws nodes
-modify for snort, bro.  clustered implemnations exists, but this concept could be extended to create a readymade image of network intrusion tools to be deployed as needed.
