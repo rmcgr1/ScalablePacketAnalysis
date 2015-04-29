@@ -3,16 +3,16 @@
 usage = """shakedown.
 
 Usage:
-   shakedown distribute [options] --user <username> --host <host>... <files>...
-   shakedown command [options] --user <username> --host <host>... <command>
-   shakedown clean [options] --user <username> --host <host>...
+   shakedown distribute [options] --user <username> (--host <host>... | --config <configfile>) <pcapfiles>...
+   shakedown command [options] --user <username> (--host <host>... | --config <configfile>)  <command>
+   shakedown clean [options] --user <username> (--host <host>... | --config <configfile>)
 
 Options:
---name <name>         Execute commands only on files that have been distributed that contain <name>, default is to process all distributed files 
+--name <name>         Execute commands only on files that have been distributed that contain <name>, the default is to process all distributed files 
 --verbose
 --host <host>         Hostname or IP address.
 --user <username>     Username to ssh 
-
+--balance             Enable load balancing.  Shifts data from poorly performing to nodes to high performing ones
 
 Example:
 
@@ -31,8 +31,7 @@ shakedown clean --user user --host 192.168.1.100 --host 192.168.1.101
 
 
 Config file?
-Using Master?
-Specify working dirs?
+make user an optional option and handle if its not there
 
 ./sshcontrol.py distribute --verbose --user user --host 192.168.2.100 --host 192.168.2.101 --host 192.168.2.102 --host 192.168.2.103 ./captures/maccdc2012_00016.pcap
 ./sshcontrol.py command  --verbose --user user --host 192.168.2.100 --host 192.168.2.101 --host 192.168.2.102 --host 192.168.2.103 "tshark -T fields -e ip.src -e dns.qry.name -Y 'dns.flags.response eq 0'"
@@ -203,18 +202,12 @@ def transfer_split_files(drone_list, chunked_file_list):
             continue
                            
         d = worker_pool.next()
-            # if d.ipaddress == "127.0.0.1":
-            # reserve file for Master
-            # d.filelist.append(file)
-            #else:
+
         if VERBOSE:
             print "[*] transfering " + fname + " to " + d.ipaddress
         subprocess.check_call(["rsync", "-avz", "-e", "ssh", fname, d.ssh_user + "@" + d.ipaddress + ":" + DRONE_DIR], stdout=subprocess.PIPE)
         d.filelist.append(file)
 
-    # TODO get master in drone list
-    #for d in drone_list:
-    #    print d.ipaddress + " " + str(d.filelist)
 
     
 # Remove files to be transfered if they exist out on a drone
@@ -268,7 +261,7 @@ def distribute_command(drone_list, cmd):
             pass
 
     for i in result:
-        pass
+        passyy
         #print i
 
 
@@ -319,7 +312,14 @@ def main():
 
 
     ssh_user = arguments['--user']
-    host_list = arguments['--host']
+
+    host_list = []
+    if arguments['--config']:
+        for i in open(arguments['<configfile>'], 'r').readlines():
+            host_list.append(i.strip())
+    else:
+        host_list = arguments['--host']
+        
     VERBOSE = arguments['--verbose']
     
     for ip in host_list:
@@ -350,7 +350,7 @@ def main():
 
     if arguments['distribute']:
 
-        file_list = arguments['<files>']
+        file_list = arguments['<pcapfiles>']
         # Prepare captures
         chunked_file_list = create_split(drone_list, file_list)
         transfer_split_files(drone_list, chunked_file_list)
