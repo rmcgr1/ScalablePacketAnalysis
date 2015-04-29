@@ -56,7 +56,7 @@ In the distribute function,  the central node splits the network packet captures
 
 In the command function, the central node executes a tshark, ngrep, or tcpdump command on each processing node against the distribtued data.  The user provides the same query that would be used locally for these programs except the option to read from a file (-r for tcpdump/tshark and -I for ngrep).  The central node builds a command to execute on the remote hosts consisting of a bash for-loop that runs the specified query against selected chunks of network data. An SSH session is established with each processing node concurrently using the python threading library.  The query command is then executed against each chunk of network data and the output is returned to the central host. The data is collected in a thread-safe data structure and sent to standard output after each node has returned its result.  Order is not maintained through this process as data is returned in order of completeion.  
 
-In the load balancing function, the central moves chunks between poorly performing nodes and high preforming nodes to produce quicker tsk completeion times.  The central node records the task completeion time.  If this time is over a 20% threshold of the completion times of other nodes, the central node calculates how many additonal files ....  implementation.  This balancing accomplishes two goals, depending on the configuration of the computation nodes and the composition of the network data in relation to the query.  With a hetrogenous makeup of  
+In the load balancing function, the central moves chunks between poorly performing nodes and high preforming nodes to produce quicker tsk completeion times.  The central node records the task completeion time.  If this time is over a 20% threshold of the completion times of other nodes, the central node calculates how many additonal files ....  implementation.  This balancing accomplishes two goals, (work on) optimizing for the differences of resources of the computation nodes and optimizing composition of the network data in relation to the query.  With a hetrogenous composition of hosts, lower-resourced hosts will take longer and after balancing, will have a less amount of network data to process.  The other case that will be improved if the searched for network data is unequally distributed through the network capture. For instance, if the traffic from a specific host is queried for repeatedly, and only occours in chunks created from the end of the network capture, the nodes that have been distributed chunks from the beginning of the capture will quickly finish.  In this case, chuncks from the end of the caputure, on the poorly preforming nodes, will be redistributed.  This load balancing behavior will not be effective in the case of a cluster of homogenous computational nodes, or if a single query is made on the dataset. (Why 20% chosen?)  
 
 Load balancing algorithm
 
@@ -64,6 +64,16 @@ record times, nodes that take longer, caluclate difference in times and find how
 
 
 Evaluation/Performance
+
+A limitation to this effort was the lack of hardware to test the system at scale. The test were conducted using a virtuals machine with 512 MB of ram. The objective is to determine the degree of paralleism exhibted by the system, the amount of overhead introduced by the systems, and identify issues that may occour when the system is scaled up.   
+
+Test Cases
+1 node
+4 equal nodes
+3 equal nodes, 1 large node
+
+4 equal nodes, load balancing
+3 equal nodes, 1 large node, load balancing
 
 
 Useage
