@@ -1,0 +1,224 @@
+Large Scale Network Analytics Using Distributed Servers 
+
+
+Abstract
+
+Analyzing network traffic is necessary for network management and defense. However, analysis of large network captures requires proportional memory and processing capacity. According to the developers of the wireshark network analyzer, a packet capture can have a memory requirement of ten times (cite) the size of the capture to model the protocol state.  This makes it difficult for a single host to analyze multi-gigabyte capture files.  This paper presents a technique to divide, distribute, and preform queries on large packet captures using a distributed system of lightweight servers. The technique leverages popular network analysis tools: tshark (command line version of wireshark), tcpdump, and ngrep, to enable network analysis techniques that work on a small network captures to scale to gigabyte size ones.   
+
+
+Introduction
+
+Packet analyzers, such as the open source wireshark, enable analysts to examine individual packets.  The analyzer decodes the structure of network protocols encapsulated in the packet and enables queries against the data using a filtering syntax.  These queries, such as listing Domain Name System (DNS) queries issued, or —- is called deep packet inspection and enables discovery of misconfigured networks, misbehaving users, or even network intrusions. Discovering limited, infrequent events of high value is obscured by the overwhelming volume of normal traffic. The difficulty increases as the dataset scales.  Wireshark has a high memory requirement because it attempts to reassemble packets flows and model layers of network protocols.  Other tools, such as tcpdump, and ngrep, do not create dependencies between packets and filter selected packets in a single pass. (concluding sentence here)
+
+
+Multiple approaches to monitor networks have been developed. One is to reduce the size of the capture by creating a summary of the relevant metadata of the network traffic, commonly called netflow.  The metadata, such as listing source and destination IP addresses, can be analyzed for anomalies.  This approach requires prior knowledge on what is necessary to capture and discards most network content. Intrusion Detection Systems (IDS), such as Snort, take a different approach by scanning traffic for pre-defined signatures. The open source Bro network security monitoring system combining a netflow approach with IDS-like functionality.  Other efforts, such as pcap2sql, translate relevant network events into a database. These approaches can provide insight into a network, but are limited by the requirement to know exactly what to extract from network traffic ahead of an event. 
+
+Other efforts have focused on analyze large network captures. Network traffic has limited dependencies outside of a session and can be split into parallel workloads for servers to analyze individually.  Techniques from (cite lee and yeonhee) and (cite RIPE-CC) both use an Hadoop-based approach to distribute work among a number of servers.  (cites lee and yeonhee)'s system ingests netflow data and utilizes custom analytics for network statistics while (RIPE-CC)'s developed a distributed DNS based analytic and has support for preforming SQL-like queries against the PCAP.  Both systems require the overhead and complexity of a Hadoop system, translation of the network data to an optimized format, and are tailored for a specific analytic uses.  Packetpig is another effort that works on full network captures and utilizes Hadoop to enable Apache Pig queries against the traffic.  These approaches...
+
+This system presented in this paper enables the same packet analyzers to be used in a distributed system. The goal is to enable efficient network queries against large network captures with a lightweight design. The system is responsible for distributing a portion of the network data to each server, issuing commands, and collecting the results. Each server is required to have the analytic tool installed (tshark, tcpdump, and ngrep are supported), rsync, a bash-like command shell, and SSH (secure shell) access.  All commands are issued over SSH and data transfers use rsync over SSH to compresses data and transfers only files that have changed.  These design principals enable a collection of heterogeneous servers to rapidly divide a large network capture and run queries issued by a central server.  The central server optimizes for differences in computational node capabilities by redistributing the amount of data each server is responsible for based on a performance metric.  This improves repeated queries against the same dataset. 
+
+The syntax of the queries are tshark, tcpdump, or ngrep commands.  These tools have a robust filtering syntax that is familiar to many.  Building upon widely used open-source tools enables reuse of optimized packet processing libraries and support for hundreds of protocols.  This avoids the complication of translating network data to fit a specific query syntax.  To match the hundreds of protocols decoded by wireshark, a custom sql-like implementation would have to identify each type of packet that may be of interest.
+
+The system is designed for a variety of use cases. One approach would be to develop the query on a subset of the data on a single machine.  Once this produces an expected result, this system can be used to run this query against the full dataset.  Another use for the system is to filter a large dataset to produce output for a consuming analytic. This could be done using unix pipes to send the output to tools such as sort, uniq, and count to generate metrics about captured traffic.  This system could be implemented by use a commercial cloud provider to add servers as the amount of network data to search increases. Another implementation could be in a network incident response where laptops are transported to a client site to be close to the network dataset and are networked together to form an ad-hoc cluster for network analysis.
+
+
+Design
+
+The primary functions of the system are the distribute function, and the command function. The distribute function splits the packet capture data among the processing servers. The command function executes packet analysis command on each server.  All remote communications utilizes SSH public-private key pairs to provide authentication and a secure channel.  
+
+In the distribute function,  the central node splits the network packet captures into chunks which are distributed equally among the processing nodes.  A capture is split into 25 MB chunks. The chunk size is import in relation to the processing capacity of the server because the memory requirement to process a network capture can be a multiple of the files size on disk (cite wireshark mailing list). This chunk size worked well for the limited resourced Virtual Machines used as processing servers during for development.  A disadvantage to a small chunk size is that there is a greater probability that a session is split between chunks which may impact some queries.  Before files are distributed out to the nodes, the central node queries each node to see what files have already been distributed. The response is used to only transfer files which have changed.  This allows for efficient repeated queries of a dataset that continues to grow. The distribution is made using the rsync program running over SSH, and compressed.     
+
+In the command function, the central node executes a tshark, ngrep, or tcpdump command on each processing node against the distributed data.  The command is the same except the removal of the option to read from a file (-r for tcpdump/tshark and -I for ngrep).  The central node builds a command to execute on the remote servers consisting of a bash for-loop that runs the specified query against selected chunks of network data. An SSH session is established with each processing node concurrently using the python threading library.  The query command is then executed against each chunk of network data and the output is returned to the central server. The data is collected in a thread-safe data structure and sent to standard output after each node has returned its result.  Order is not maintained through this process as data is returned in order of completion.  
+
+In the load balancing function, the central moves chunks between poorly performing servers and highly preforming servers.  The central node records the task completion time.  If this time is over a 20% threshold of the completion times of other servers, the central node calculates a proportional number of files to transfer from a slow server to a fast server.  This balancing accomplishes two goals, utilizing more of high resourced servers and evening the distribution of "interesting" network data in relation to repeated queries.  An example of "interesting" data would be if a queries targets a specific network device, and traffic from this device only occurs in chunks at the end of the network capture, this chunks would be gradually redistributed among the processing servers.  This load balancing technique will not be effective for a cluster of homogenous processing servers, or if the dataset is changed following each query.
+
+
+Evaluation
+
+A limitation to this effort was the lack of hardware to test the system at scale. The test were conducted using Virtual Machines (VM) with 512 MB of RAM and a single core processor.  All VMs are hosted on an 8 GB RAM, quad-core Apple iMac.   The objective is to determine the degree of parallelism exhibited by the system, the amount of overhead introduced by the systems, and identify issues that may occur if the system is implemented at scale.
+
+There are various factors that could have affected the drones.  The background load on the host machine was not constant. Another issue is the VM overhead...
+
+Test Cases
+
+1 node
+node 0 in 383.662714958
+
+2 equal nodes
+node 0 in 180.446943998
+node 1 in 226.667176962
+speedup 1.6
+
+4 equal nodes
+node 0 in 109.422397852
+node 1 in 123.732256174
+node 2 in 127.157043934
+node 3 in 160.569280148
+speedup 2.3
+
+8 equal nodes
+node 0 in 43.2271559238
+node 1 in 63.0207438469
+node 2 in 77.6714920998
+node 3 in 83.6117560863
+node 4 in 89.0525529385
+node 5 in 96.5401399136
+node 6 in 105.154409885
+node 7 in 113.43266201
+speedup 3.38
+
+
+3 equal nodes, 1 large node
+4 equal nodes, load balancing
+8 equal nodes, load balancing
+3 equal nodes, 1 large node, load balancing
+overhead?
+
+Paragraph about results
+
+
+An underlying limitation is that this system is a centralized algorithm. As the system scales, the central node can become overwhelmed with network traffic as it becomes a hotspot with all traffic leaving and returning to it. There are also no provisions of the failure of a node.  A node failure will cause incomplete output.  The network files can be re-distributed to functioning nodes, but the running computation will be lost.  Another unaddressed issue is the possibility for the system may be overwhelmed by a multitude of results. The result of a query may overflow the bounded buffer that is transferring the result back to the central node. 
+
+
+Conclusion
+
+(last paragraph talk about future possibilities)
+(analyze results, high level)
+The ability to efficiently analyze large datasets of full network captures may lead to a different approach in network management.  While an IDS or NSM may indicate the presence of an adversary in the network, in depth packet analysis may uncover the details of damage done to the network.  With decreasing storage costs, an organization could augment existing practices by circular buffer of full network capture periodically analyzed for unusual activity…
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+##########
+Structure
+
+
+
+Abstract
+What’s the problem?
+Why should the reader care?
+What have you accomplished?
+What are the implications? 
+
+
+
+Introduction
+Longer treatment of points in abstract
+What previous work does paper build on?
+emphasize the positive, more than shortcomings
+Pointers to rest of paper 
+
+
+
+Body
+Highly variable, choose well
+Logical progression with later sections
+building on what has come before
+Anticipate readers’ questions and give them
+answers (or tell them when you have none) 
+
+
+
+
+
+Summary/Conclusion
+Brief recap
+•
+What have you not done?
+How might others take it further? •
+
+
+
+
+
+
+
+############
+Notes
+
+
+The system is designed to run with minimal installation, such as laptops transported to a client site, and the system has shown a speedup of .... This allows scaleable network analysis techniques in a variety of situations such as incident response in at a short notice.
+
+Design choice, central datastore.... The cetralized nature of the system may limit the ability for the system to scale. 
+This effort has not addressed reslizance to task failures.
+
+An improvement could be a true decentralized algorithm where nodes could use a gossip-like algorithm to effectively distribute files and tasks.  
+
+Hardware limitations - all results hampered due to running on limited number of VMs. Not definitively answered the question of if this approach would scale.  
+
+Commerical cloud aspect - spin up aws nodes
+modify for snort, bro.  clustered implemnations exists, but this concept could be extended to create a readymade image of network intrusion tools to be deployed as needed.
+
+(repeted queries same data, increasing data, generate output for other analyitcs)
+
+or evading the IDS, deep packet inspection is needed.
+
+These approaches are effective for well known or structured network analytics.  When deep analytics are needed for identifying new threats, zero-day attacks,     Even if it is known exactly what to look for inside of a packet capture, sorting through the volume. ...   Packet analyzers interpret interpret show    
+
+weakness of signature based IDS, you have to know what you're looking for
+
+This system reduces analyzing large network datasets to a "pleasingly parallel" problem that can be distributed to any number of distributed hosts. The performance of this system, demonstrates a speedup of ///.  With repeated queries, the system adapts to a hetrogenous collection of distributed by transfering additional work to high-preforming hosts. 
+
+This approach enables large-scale deep packet inspection using the right tool for the job.
+
+
+Thoughts: work requires variety of tools. Enables analysts to use their tools for small-scale analytics to large scale.  Limitations of SQL/RDBMS, can't preform the deep analytics, parsing network traffic into intelligable SQL tables resutls in wasted computation unless previously know exactly what will be needed.  Utilizing own tool approach allows efecient parsing of headers, keyword, and binary signature searches.
+
+
+Wireshark/Tshark
+
+Ngrep
+
+Netflow data
+
+IDS 
+
+Bro
+
+Hadoop based systems
+
+SQL
