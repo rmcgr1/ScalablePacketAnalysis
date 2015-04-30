@@ -32,6 +32,8 @@ shakedown clean --user user --host 192.168.1.100 --host 192.168.1.101
 
 Config file?
 make user an optional option and handle if its not there
+make transfer threaded
+
 
 ./sshcontrol.py distribute --verbose --user user --host 192.168.2.100 --host 192.168.2.101 --host 192.168.2.102 --host 192.168.2.103 ./captures/maccdc2012_00016.pcap
 ./sshcontrol.py command  --verbose --user user --host 192.168.2.100 --host 192.168.2.101 --host 192.168.2.102 --host 192.168.2.103 "tshark -T fields -e ip.src -e dns.qry.name -Y 'dns.flags.response eq 0'"
@@ -261,7 +263,7 @@ def distribute_command(drone_list, cmd):
             pass
 
     for i in result:
-        passyy
+        pass
         #print i
 
 
@@ -293,8 +295,10 @@ def sanitize_command(cmd, name = None):
     
 def clean_drones(drone_list):
     for d in drone_list:
-        stdin, stdout, stderr = d.sshconn.exec_command("rm `ls " + DRONE_DIR + " | grep 'chunk'`")
-
+        stdin, stdout, stderr = d.sshconn.exec_command("rm `find " + DRONE_DIR + " | grep 'chunk'`")
+    if VERBOSE:
+        print "[*] Finished deleting files on drones" 
+        
 ####
 # Main 
 ####
@@ -316,6 +320,8 @@ def main():
     host_list = []
     if arguments['--config']:
         for i in open(arguments['<configfile>'], 'r').readlines():
+            if i.startswith("#"):
+                continue
             host_list.append(i.strip())
     else:
         host_list = arguments['--host']
