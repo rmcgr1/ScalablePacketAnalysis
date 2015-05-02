@@ -33,7 +33,7 @@ shakedown clean --user user --host 192.168.1.100 --host 192.168.1.101
 Config file?
 make user an optional option and handle if its not there
 make transfer threaded
-
+clean chunks after transfer
 
 ./sshcontrol.py distribute --verbose --user user --host 192.168.2.100 --host 192.168.2.101 --host 192.168.2.102 --host 192.168.2.103 ./captures/maccdc2012_00016.pcap
 ./sshcontrol.py command  --verbose --user user --host 192.168.2.100 --host 192.168.2.101 --host 192.168.2.102 --host 192.168.2.103 "tshark -T fields -e ip.src -e dns.qry.name -Y 'dns.flags.response eq 0'"
@@ -69,6 +69,11 @@ class Drone:
         self.filelist = []
         self.ssh_user = None
         self.freemem = None
+        self.completiontime = 0
+
+    def time_per_file():
+        return self.completiontime / len(self.filelist)
+        
 '''
 TODO:
 
@@ -186,17 +191,24 @@ def split(file_list, nodes, split_size, max_size):
             print "[!] Error: tcpdump couldn't split " + f
             sys.exit(1)
 
+
+def transfer_thread(d, fname):
+    if VERBOSE:
+        print "[*] transfering " + fname + " to " + d.ipaddress
+    subprocess.check_call(["rsync", "-avz", "-e", "ssh", fname, d.ssh_user + "@" + d.ipaddress + ":" + DRONE_DIR], stdout=subprocess.PIPE)
+    d.filelist.append(fname)
+
+            
 def transfer_split_files(drone_list, chunked_file_list):
-    # TODO Thread this
     
-    # Transfer the list of "chunked" files to drones and master
+    # Transfer the list of "chunked" files to drones
     worker_pool = cycle(drone_list)
 
     distributed_files = read_existing_files(drone_list)
     if VERBOSE:
         print "[*] Already distributed files: " + str(distributed_files)
-    
-    # TODO Check free space??
+
+    thread_list = []
     for fname in chunked_file_list:
 
         if [fname.split('/')[-1], str(os.path.getsize(fname))] in distributed_files:
@@ -205,11 +217,13 @@ def transfer_split_files(drone_list, chunked_file_list):
                            
         d = worker_pool.next()
 
-        if VERBOSE:
-            print "[*] transfering " + fname + " to " + d.ipaddress
-        subprocess.check_call(["rsync", "-avz", "-e", "ssh", fname, d.ssh_user + "@" + d.ipaddress + ":" + DRONE_DIR], stdout=subprocess.PIPE)
-        d.filelist.append(file)
+        t = threading.Thread(target=transfer_thread, args = (d,fname))
+        t.daemon = True
+        t.start()
+        thread_list.append(t)
 
+    for t in thread_list:
+        t.join()
 
     
 # Remove files to be transfered if they exist out on a drone
@@ -238,7 +252,8 @@ def send_command(drone, cmd, q):
     start_time = timeit.default_timer()
     print "sent command " + str(drone.ipaddress)
     result = stdout.read()
-    print "recieved " + str(drone.ipaddress) + "in " + str(timeit.default_timer() - start_time)
+    d.completiontime = timeit.default_timer() - start_time
+    print "recieved " + str(drone.ipaddress) + "in " + str(d.completiontime)
     q.put(result)
 
         
@@ -273,8 +288,6 @@ def sanitize_command(cmd, name = None):
         print "[!] Error, do not use -r or -I to designate a file, use --name"
         sys.exit(1)
 
-    # TODO include support for ngrep here"
-    # TODO catch writing, capturing behavor??
     '''
     if name == None:
         cmd = "find " + DRONE_DIR + " -iname '*chunk*' -type f -print0 | xargs -0 -I % " + cmd + " -r %"
@@ -288,6 +301,24 @@ def sanitize_command(cmd, name = None):
         cmd = "for i in `find " + DRONE_DIR + " | grep '*" + name +"*chunk'`; do " + cmd + " -r $i; done"
     
     return cmd
+
+###
+# Load Balancing
+###
+
+def load_balance(drone_list):
+
+    sum = 0
+    for d in drone_list:
+        #Get time for file
+        sum = sum + d.time_per_file
+    average = sum / len(drone_list)
+
+    for d in drone_list:
+        
+        
+
+    
 
 ###
 # Deleteing Files
@@ -368,10 +399,10 @@ def main():
     if arguments['command']:
         #cmd = "tshark -r /tmp/packet_analysis/*pcap* -T fields -e ip.src -e dns.qry.name -Y 'dns.flags.response eq 0'"
 
-        if VERBOSE:
-            distributed_files = read_existing_files(drone_list)
-            print "[*] Already distributed files: " + str(distributed_files)
-
+        #if VERBOSE:
+            #distributed_files = read_existing_files(drone_list)
+            #print "[*] Already distributed files: " + str(distributed_files)
+            
 
         if arguments['--name'] is None:
             cmd = sanitize_command(arguments['<command>'])
@@ -382,7 +413,12 @@ def main():
             print "[*] Sending command to drones: " + cmd
 
         distribute_command(drone_list, cmd)
-    
+
+        if arguments["--balance"]:
+            load_balance(drone_list)
+        
+        
+        
     if arguments['clean']:
         clean_drones(drone_list)
         
