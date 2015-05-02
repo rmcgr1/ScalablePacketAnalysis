@@ -49,6 +49,7 @@ import time
 import re
 import Queue
 import threading
+from random import shuffle
 from itertools import cycle
 from docopt import docopt
 import pdb
@@ -311,13 +312,60 @@ def load_balance(drone_list):
     sum = 0
     for d in drone_list:
         #Get time for file
-        sum = sum + d.time_per_file
-    average = sum / len(drone_list)
+        sum = sum + d.time_per_file()
+        average = sum / len(drone_list)
+    
+    slower = []
+    faster = []
+    threshold = .30
 
     for d in drone_list:
-        
-        
+        if d.time_per_file() > average + average * threshold:
+            slower.append(d)
+        else if d.time_per_file() < average - average * threshold:
+            faster.append(d)
 
+        #These sorts are not going to work
+        list.sort(slower, key=drone.time_per_file(), reverse)
+        list.sort(faster, key=drone.time_per_file())
+
+        # Make lists same size, favoring slower ones
+        if len(slower) > len(faster):
+            faster = faster[0:len(slower)-1]
+
+        # see if this matches the slowest going to the fastest
+        for i in len(slower): 
+            ds = slower[i]
+            df = faster[i]
+
+            num_files_to_transfer = (ds.completiontime - average) / ds.time_per_file
+            shuffle(ds.filelist)
+        
+            thread_list = []
+            for i in range(num_files_to_transfer):
+                t = threading.Thread(target=load_balance_transfer_thread, args = (ds, df, fname))
+                t.daemon = True
+                t.start()
+                thread_list.append(t)
+
+            for t in thread_list:
+                t.join()
+
+            
+            
+                    
+def load_balance_transfer_thread(ds, df, fname):
+    if VERBOSE:
+        print "[*] transfering " + fname + " from " + ds.ipaddress + " to " + df.ipaddress
+    subprocess.check_call(["rsync", "-avz", "-e", "ssh", ds.ssh_user + "@" + ds.ipaddress + ":" + DRONE_DIR + fname, "/tmp/" + fname], stdout=subprocess.PIPE)
+    
+    subprocess.check_call(["rsync", "-avz", "-e", "ssh", "/tmp/" + fname, df.ssh_user + "@" + df.ipaddress + ":" + DRONE_DIR + fname], stdout=subprocess.PIPE)
+
+    subprocess.check_call(["rm", "/tmp/" + fname], stdout=subprocess.PIPE)
+    
+
+    df.filelist.append(fname)
+    ds.filelist.remove(fname)
     
 
 ###
