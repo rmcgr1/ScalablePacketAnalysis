@@ -49,6 +49,8 @@ import time
 import re
 import Queue
 import threading
+import operator
+import math
 from random import shuffle
 from itertools import cycle
 from docopt import docopt
@@ -72,7 +74,9 @@ class Drone:
         self.freemem = None
         self.completiontime = 0
 
-    def time_per_file():
+    def time_per_file(self):
+        if len(self.filelist) == 0:
+            return 0
         return self.completiontime / len(self.filelist)
         
 '''
@@ -233,6 +237,7 @@ def read_existing_files(drone_list):
     existing_file_list = []
     
     for d in drone_list:
+        d.filelist = []
         stdin, stdout, stderr = d.sshconn.exec_command("ls -l " + DRONE_DIR + " | grep 'chunk' | awk '{print $9, $5}'")
         result = stdout.read()
         if result == '':
@@ -240,7 +245,8 @@ def read_existing_files(drone_list):
         for i in result.split('\n'):
             if i is not '':
                 existing_file_list.append([i.split()[0], i.split()[1]])
-
+                d.filelist.append(i.split()[0])
+                
     return existing_file_list
 
 
@@ -248,13 +254,14 @@ def read_existing_files(drone_list):
 # Command Distribution 
 ####
     
-def send_command(drone, cmd, q):
-    stdin, stdout, stderr = drone.sshconn.exec_command(cmd)
+def send_command(d, cmd, q):
+    stdin, stdout, stderr = d.sshconn.exec_command(cmd)
     start_time = timeit.default_timer()
-    print "sent command " + str(drone.ipaddress)
+    print "sent command " + str(d.ipaddress)
     result = stdout.read()
+
     d.completiontime = timeit.default_timer() - start_time
-    print "recieved " + str(drone.ipaddress) + "in " + str(d.completiontime)
+    print "[*] finished " + str(d.ipaddress) + " in " + str(d.completiontime)
     q.put(result)
 
         
@@ -309,47 +316,61 @@ def sanitize_command(cmd, name = None):
 
 def load_balance(drone_list):
 
+
+    #Populate d.filelist()
+    read_existing_files(drone_list)
+    
     sum = 0
     for d in drone_list:
         #Get time for file
-        sum = sum + d.time_per_file()
-        average = sum / len(drone_list)
+        sum = sum + d.completiontime
+
+    average = sum / len(drone_list)
     
     slower = []
     faster = []
-    threshold = .30
+    threshold = .10
+
+
 
     for d in drone_list:
-        if d.time_per_file() > average + average * threshold:
+        if d.completiontime > average + average * threshold:
             slower.append(d)
-        else if d.time_per_file() < average - average * threshold:
+        elif d.completiontime < average - average * threshold:
             faster.append(d)
 
-        #These sorts are not going to work
-        list.sort(slower, key=drone.time_per_file(), reverse)
-        list.sort(faster, key=drone.time_per_file())
+    if len(slower) == 0 or len(faster) == 0:
+        return
+            
+    #These sorts are not going to work
+    slower.sort(key=operator.attrgetter("completiontime"), reverse=True)
+    faster.sort(key=operator.attrgetter("completiontime"), reverse=False)
 
-        # Make lists same size, favoring slower ones
-        if len(slower) > len(faster):
-            faster = faster[0:len(slower)-1]
-
-        # see if this matches the slowest going to the fastest
-        for i in len(slower): 
-            ds = slower[i]
-            df = faster[i]
-
-            num_files_to_transfer = (ds.completiontime - average) / ds.time_per_file
-            shuffle(ds.filelist)
+    pdb.set_trace()
         
-            thread_list = []
-            for i in range(num_files_to_transfer):
-                t = threading.Thread(target=load_balance_transfer_thread, args = (ds, df, fname))
-                t.daemon = True
-                t.start()
-                thread_list.append(t)
+    # Make lists same size, favoring slower ones
+    if len(faster) > len(slower):
+        faster = faster[0:len(slower)-1]        
+    if len(slower) > len(faster):
+        slower = slower[0:len(faster)-1]
 
-            for t in thread_list:
-                t.join()
+    # see if this matches the slowest going to the fastest
+    for i in range(len(slower)): 
+        ds = slower[i]
+        df = faster[i]
+
+        num_files_to_transfer = int(math.ceil((ds.completiontime - average) / ds.time_per_file()))
+        shuffle(ds.filelist)
+
+        thread_list = []
+        for i in range(num_files_to_transfer):
+            t = threading.Thread(target=load_balance_transfer_thread, args = (ds, df, ds.filelist[i]))
+            t.daemon = True
+            t.start()
+            thread_list.append(t)
+
+        for t in thread_list:
+            t.join()
 
             
             
@@ -358,6 +379,8 @@ def load_balance_transfer_thread(ds, df, fname):
     if VERBOSE:
         print "[*] transfering " + fname + " from " + ds.ipaddress + " to " + df.ipaddress
     subprocess.check_call(["rsync", "-avz", "-e", "ssh", ds.ssh_user + "@" + ds.ipaddress + ":" + DRONE_DIR + fname, "/tmp/" + fname], stdout=subprocess.PIPE)
+
+    stdin, stdout, stderr = ds.sshconn.exec_command("rm " + DRONE_DIR + fname)
     
     subprocess.check_call(["rsync", "-avz", "-e", "ssh", "/tmp/" + fname, df.ssh_user + "@" + df.ipaddress + ":" + DRONE_DIR + fname], stdout=subprocess.PIPE)
 
@@ -391,8 +414,6 @@ def main():
 
 
     arguments = docopt(usage)
-    print arguments
-
 
     ssh_user = arguments['--user']
 
