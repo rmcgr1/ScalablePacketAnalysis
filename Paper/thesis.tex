@@ -1,204 +1,105 @@
-\documentclass[final]{union-cs-thesis}
-% Use \documentclass[condensed]{union-cs-thesis} to cause the layout to
-% take fewer pages.  It uses single-spacing instead of double spacing and
-% compresses the front matter. This might be useful as you draft your
-% thesis.
-
-% Use \documentclass[final]{union-cs-thesis} for the final version.
-
-% percent sign starts a comment, goes to end of line
-
-\usepackage{graphicx}
-\usepackage[noend]{algorithmic}
-
+\documentclass{article}
+\usepackage{multicol}
 
 \begin{document}
 
-\title{Computer Science Senior Thesis \LaTeX{} template}
-\author{Aaron G. Cass\footnote{Based on an earlier version by John Rieffel}}
+\title{Large Scale Network Analytics Using Distributed Servers}
+\author{Ryan McGrath}
 \maketitle
 
 \begin{abstract}
 
-This document provides the basic format and style recommended for a
-Computer Science Senior Design project at Union College.  After a
-brief introduction we illustrate the various sections we recommend, and
-provide brief explanations of their contents.  Parenthetical comments
-provide guidance for content.  Many further tips are included in the
-latex source. (Your abstract should provide a concise
-overview of your thesis: a brief introduction of the problem, a
-summary of the background, a description of your research question, a
-description of your research design and implementation, a summary of
-your results and conclusion. Often, people only read the abstract (and
-captions) of papers!)
+  Analyzing network traffic is necessary for network management and defense. However, analysis of large network captures is difficult due to proportional memory and processing capacity for the quanity of network data. According to the developers of the wireshark network analyzer, a packet capture can have a memory requirement of ten times (cite) the size of the capture to model the protocol state.  This makes it difficult for a single host to analyze multi-gigabyte capture files.  This paper presents a system to divide, distribute, and preform queries on large packet captures using a distributed system of lightweight servers. This enables network analysis techniquess that work on small network captures to scale to gigabyte sized captures.
+
+by leveraging popular network analysis tools: tshark (command line version of wireshark), tcpdump, and ngrep, to enable network analysis techniques that work on a small network captures to scale to gigabyte size ones.   
+
 
 \end{abstract}
 
-\tableofcontents %that's all you need!
-\listoffigures %again easy
-\listoftables %as pie
 
+\begin{multicols}{2}
+  
 \section{Introduction} % \section* would create section without section
                        % number.
 
-The Computer Science Thesis is the culmination of your CS
-education at Union College.  By the end of this capstone experience,
-typically winter of your senior year, you will have created and
-implemented your own full-fledged independent research project.  The
-process begins with the CSC497 seminar, in which you continue to
-develop the skills necessary for independent research to which you were
-introduced in your Sophomore Research Seminar (SRS).  The Senior
-thesis serves as a way to document and present your capstone project. 
+Packet analyzers, such as the open source wireshark software, enable analysts to examine individual packets.  An analyzer decodes the structure of network protocols encapsulated in the packet and enables queries against the data using a filtering syntax.  These queries, such as listing Domain Name System (DNS) queries issued, or viewing HTTP requests to webserver can uncover misconfigured networks, misbehaving users, or even network intrusions. Discovering limited, infrequent malicious events is obscured by the overwhelming volume of normal traffic. This difficulty of finding the ``needle in the haystack'' increases as the dataset scales.  Packet analyzers sucha s Wireshark has a high memory requirement because it attempts to reassemble packets flows and model layers of network protocols.  Other packet analysis tools, such as tcpdump, and ngrep, do not create dependencies between packets and filter selected packets in a single pass. These have a lower resource requirement, but still can be time consuming on large datasets. 
 
-Typically, each term of your capstone experience includes an intensive
-writing experience, resulting in a substantive final document.  This
-LaTeX template should serve for all three written projects, with only
-modest changes to the template itself.  Descriptions of each term's
-outcomes are as follows:
+This paper presents a system to enable packet analyzers to scale to large datasets by utilzing a distributed system. The system distributes a portion of the network data to each server, issues commands, and collects the results. Each server is required to have the analytic tool installed (tshark, tcpdump, and ngrep are currenlty supported), rsync, a bash-like command shell, and SSH (secure shell) access.  All commands are issued over SSH and data transfers use rsync over SSH to only transfer changed files.  This enables a collection of heterogeneous servers to rapidly divide a large network capture and run queries issued by a central server.  The central server can optimize for differences in server resource capabilities and data by redistributing the chunks of data each server processes.  This improves repeated queries against the same dataset. 
 
-\begin{itemize}
-\item{CSC 497} A well crafted and fully formed research proposal,
-describing your research question and design methodology.  This
-proposal will also include a comprehensive study of prior work along
-with an annotated bibliography.
+The syntax of the queries are tshark, tcpdump, or ngrep commands.  These tools have a robust filtering syntax that is well known.  Building upon widely used open-source tools enables reuse of optimized packet processing libraries and support for hundreds of protocols.  This avoids the complication of translating network data to fit a specific query syntax.  To match the hundreds of protocols decoded by wireshark, a custom sql-like implementation would have to identify each type of packet that may be of interest.
 
-\item{CSC 498} A well crafted and finely detailed research design
-document.  This will include elaborations on your paper from 497 (a
-well crafted, motivated and  contextualized research question, and a
-comprehensive study of prior work), as well as improvements to your
-research methods and plans for data acquisition and analysis.
+The system is designed for a variety of use cases. One approach would be to develop the query on a subset of the data on a single machine.  Once this produces an expected result, this system can be used to run this query against the full dataset.  Another use is to filter a large dataset to produce output for a consuming analytic. The output could sent using unix pipes to tools such as sort, uniq, and count to generate metrics about captured traffic.  One way this system could be implemented is to use a commercial cloud provider to add additional servers until the desired performance with a dataset is reached. Another implementation, potentially useful for a network incident response, could use laptops that are transported to a client site as an cluster for network analysis.
 
-\item{CSC 499} Your Senior Thesis.  This will include elaborations on your
-paper from 498, as well as description and analysis of the data
-gathered during your research.  Your advisor may also ask you to write
-a shorter 8-page paper worthy of submission to an academic conference.
+\section{Related Work}
 
-\end{itemize}
+Multiple approaches have been developed to analyize traffic and monitor networks. One is to reduce the size of the captured network data by storing the metadata of the network traffic, commonly called netflow.  This metadata, such as listing source and destination IP addresses, can be analyzed for anomalies.  This approach requires prior knowledge on what is necessary to capture and discards most network content. Intrusion Detection Systems (IDS), such as Snort, take a different approach by scanning traffic for pre-defined signatures. The open source Bro network security monitoring system combining a netflow approach with IDS-like functionality.  Other efforts, such as pcap2sql, translate relevant network events into a database. These approaches can provide insight into a network, but are limited by the requirement to know exactly what to extract from network traffic ahead of an event. 
 
-We have written this document as a means to formalize and normalize
-written reports across projects and advisors.  {\em This should only
-serve as a guide and template: no matter what, be sure
-to consult with your own project advisor to confirm their specific
-requirements for your thesis!}  After all, they will determine your
-final grade.
+Other efforts have focused on analyze large network captures. Network traffic has limited dependencies outside of a session and can be split into parallel workloads for servers to analyze individually.  Techniques from (cite lee and yeonhee) and (cite RIPE-CC) both use an Hadoop-based approach to distribute work among a number of servers.  (cites lee and yeonhee)'s system ingests netflow data and utilizes custom analytics for network statistics while (RIPE-CC) has developed a distributed DNS based analytic and supports preforming SQL-like queries against the captured data.  Both systems require the overhead and complexity of a Hadoop system, translation of the network data to an optimized format, and are tailored for a specific analytic uses.  Packetpig is another effort that works on full network captures and utilizes Hadoop to run Apache Pig queries against captured traffic.  These approaches...
 
-(In this section you need to motivate your entire research project.
-What did you work on and why is it important?)
+\section{Methods and Design}
 
-% notice I've given this section a label with the \label command
-\section{Background and Related Work}\label{sec:background}
+The primary functions of the system are the distribute function, and the command function. The distribute function splits the packet capture data among the processing servers. The command function executes packet analysis command on each server.  All remote communications utilizes SSH public-private key pairs to provide authentication and a secure channel.  
 
-This can be a section where you contextualize research that others
-have done.  Here are some random citations to get you started.  See
-the .bib file for details.  Trimmer~\cite{trimmer-goqbot}wrote a neat paper about soft
-robots.  Clune {\em et al}~\cite{clune-endless} have done some neat
-work with evolving objects.  Many other people have done cool
-research~\cite{bongard-3d-cppn,Lobo:form}.  Dawkins even wrote a book
-about it~\cite{dawkins:blind}.  Occassionally you'll need to cite a
-web page like the CS Dept's page~\cite{cswebpage}.
-\begin{figure}
-\centering
-\includegraphics[width=2in]{CS_LOGO.pdf}
-\caption{This is the test image caption.  Generally images are first
-saved in PDF or EPS format.  You can use other LaTeX packages (like
-graphicx) for other image
-formats.} \label{fig:cslogo}
-\end{figure}
+In the distribute function,  the central node splits the network packet captures into chunks which are distributed equally among the processing nodes.  A capture is split into 25 megabyte (MB) chunks. The chunk size is import in relation to the processing capacity of the server because the memory requirement to process a network capture can be a multiple of the files size on disk. This chunk size preformed well during development because limited resourced Virtual Machines were used.  A disadvantage to a small chunk size is that there is a greater probability that a session is split between chunks which may impact some queries.  Before files are distributed out to the nodes, the central node queries each node to see what files have already been distributed. The response is used to only transfer files which have changed.  This allows for efficient repeated queries of a dataset that continues to grow. The distribution is made using the rsync program running over SSH, and compressed.     
 
-\section{Methods and Design} \label{sec:methods}
+In the command function, the central node executes a tshark, ngrep, or tcpdump command on each processing node against the distributed data.  The command does not have the option read from a file (-r for tcpdump/tshark and -I for ngrep).  The central server uses the inputted command to build a bash for-loop that runs on each processing server. An SSH session is established with each processing server concurrently using the python threading library.  Each processing node executes the command against their local allotment of the network data and returns the output to the central server. The data is collected in a thread-safe data structure and sent to standard output in order of completion.
 
-(You might want a section like this, but talk to your advisor about
-the exact format they request).
+In the load balancing function, the central moves chunks between poorly performing servers and highly preforming servers.  The central node records the task completion time after a query.  If a processing node's completion time is 20 percent over the average completion times of other servers, the central node calculates a proportional number of randomly selected files to transfer from a slow server to a fast server.  This balancing accomplishes two goals, utilizing more of high resourced servers and evening the distribution of sought-after network data throughout the cluster.  An example of sought-after data would be if a queries targets a specific network device, and traffic from this device only occurs in chunks of the network capture concentrated on one processing server, eventually these chunks would be redistributed. 
 
-This guide is written in the LaTeX markup language, and edited in
-emacs (you may use the editor of your choice, of course) and compiled
-using pdflatex.  A Makefile is included in the directory, and is a
-useful way to compile edits.
+\section{Evaluation} 
 
-LaTeX is fantastic for many reasons, but one of my favorite is the
-ability to use labels to refer to figures, sections, formulae, etc.
-For instance I may want to refer to Section~\ref{sec:background} in
-the text here, or maybe to Figure~\ref{fig:cslogo}.  As you add and remove sections and subsections, LaTeX
-intelligently renumbers references accordingly.
+A limitation to evaluating this effort was a lack of hardware to test the system at scale. The test were conducted using Virtual Machines (VM) allocated 512 MB of RAM and a single core processor.  All VMs are hosted on an 8 GB RAM, quad-core Apple iMac. Since resources need to be reserved for the host operating sytem, a limited number of VMs can run at once.  Tests with more VMs running may have been more affected by competition for processor time, disk access, background activity of the host, and the overhead of running the VMs.
 
-See the source code:
-Often you may want to include psuedocode in your thesis.  The {\em
-algorithmic} package can help you with that.  Here is psuedocode for
-compiling your thesis:
+With these constraints, the objective is to determine the degree of parallelism exhibited by the system to see if it may be implemented at scale. The system was configured to extract all dns queries out of a 1.4 GB packet capture in pcap format with different numbers of processing servers.  The load balancing technique was tried for repeated queries on the 4 and 8 server cluster. 
 
-%this is using the algorithmic package
-\begin{algorithmic}[1]
-\WHILE{you see compile errors or need to make changes}
-  \STATE edit source in text editor of choice
-  \STATE compile by typing ``make''
-\ENDWHILE
-\end{algorithmic}
+1.4 GB
 
-Instead, you may want verbatim code in your thesis.  Use this
-sparingly!
-%note spaces work as whitespace, tabs do not
-\begin{verbatim}
-define factorial (n):
-     if (n == 0):
-        return 1
-     else:
-        return n*factorial(n-1)
-\end{verbatim}
+Test Cases
 
-(Your methods and design section should describe everything someone
-might need to replicate your experiment, along with explanation of
-design choices along the way).
+1 node
+node 0 in 383.662714958
 
-\section{Another Section}
+2 equal nodes
+node 0 in 180.446943998
+node 1 in 226.667176962
+speedup 1.6
 
-Often you will perform experiments or human subject studies as part of
-your thesis research.  Here you might describe the {\em actual} experiments
-performed, as opposed to the {\em experimental setup} described in
-section~\ref{sec:methods} above.  Or you may need another section (or
-sections) entirely).
+4 equal nodes
+node 0 in 109.422397852
+node 1 in 123.732256174
+node 2 in 127.157043934
+node 3 in 160.569280148
+speedup 2.3
 
-\subsection{a subsection}
-
-Look! we can make subsections!
-
-\subsubsection{a subsubsection}
-
-and sub sub sections!
-
-\paragraph{there are no subsubsubsections}
-
-You may use a paragraph construct instead.
-
-\section{Yet Another Section}
-
-This might be a good place for an example table.  Table \ref{tab:timeline}
-shows a time line for a CS Thesis.  Note that we are writing in {\bf all}
-of the terms --- we are not waiting until the end of the CSC499 to write up
-the thesis.  Note: if you just use a tabular environment outside of a table
-environment, you still get a table, but it will be placed directly in the
-text where you put it, and it will not be shown in the List of Tables.
-
-\begin{table}
-\begin{center}
-\begin{tabular}{r c l}
-{\bf Term} &{\bf Course} &{\bf Aims/Outcomes} \\ \hline
-Junior Spring & CSC497 & Find Advisor, develop ideas\\ 
-&&{\bf A research question and fully formed proposal}\\ \hline
-Senior Fall& CSC498 & Do lots of work and writing\\
-Senior Winter & CSC499 & More work, more writing\\
-&&{\bf A Completed Capstone Design
-Project}\\ \hline
-\end{tabular}
-\end{center}
-\caption{A time line for a CS Thesis\label{tab:timeline}}
-
-\end{table}
+8 equal nodes
+node 0 in 43.2271559238
+node 1 in 63.0207438469
+node 2 in 77.6714920998
+node 3 in 83.6117560863
+node 4 in 89.0525529385
+node 5 in 96.5401399136
+node 6 in 105.154409885
+node 7 in 113.43266201
+speedup 3.38
 
 
-\section{Final Section}
+3 equal nodes, 1 large node
+4 equal nodes, load balancing
+8 equal nodes, load balancing
+3 equal nodes, 1 large node, load balancing
+overhead?
 
-All good things must come to an end.
 
-\bibliography{thesis}  
-\bibliographystyle{plain}
+
+
+An underlying limitation is that this system is a centralized algorithm. As the system scales, the central node can become overwhelmed with network traffic as it becomes a hotspot with all traffic leaving and returning to it. There are also no provisions of the failure of a node.  A node failure will cause incomplete output.  The network files can be re-distributed to functioning nodes, but the running computation will be lost.  Another unaddressed issue is the possibility for the system may be overwhelmed by a multitude of results. The result of a query may overflow the bounded buffer that is transferring the result back to the central node. 
+
+
+\section{Conclusion}
+
+(last paragraph talk about future possibilities)
+(analyze results, high level)
+The ability to efficiently analyze large datasets of full network captures may lead to a different approach in network management.  While an IDS or NSM may indicate the presence of an adversary in the network, in depth packet analysis may uncover the details of damage done to the network.  With decreasing storage costs, an organization could augment existing practices by circular buffer of full network capture periodically analyzed for unusual activity…
+
+\end{multicols}
 \end{document}
