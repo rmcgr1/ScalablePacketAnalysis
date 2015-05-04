@@ -1,0 +1,114 @@
+\documentclass{article}
+\usepackage{multicol}
+
+\begin{document}
+
+\title{Large Scale Network Analytics Using Distributed Servers}
+\author{Ryan McGrath}
+\maketitle
+
+\begin{abstract}
+
+  Analysis of network traffic is necessary for network management and defense. However, analysis of large network packet captures is difficult due to proportional memory and processing requirements for the quantity of network data. A packet capture can have a memory requirement of ten times its size (cite). This makes it difficult for a single host to analyze multi-gigabyte capture files.  This paper presents a system to divide, distribute, and query large packet captures using a distributed system of lightweight servers. This enables network analysis techniques for small network captures to scale to gigabyte-sized captures.
+
+
+\end{abstract}
+
+
+\begin{multicols}{2}
+  
+\section*{Introduction} % \section* would create section without section
+                       % number.
+
+
+Packet analyzers, such as the open source Wireshark, enable analysts to examine individual packets.  An analyzer decodes the structure of network protocols encapsulated in the packet and enables queries against the data using a filtering syntax.  These queries can uncover misconfigured networks, misbehaving users, or even network intrusions. The overwhelming volume of normal traffic can make it difficult to discover limited, infrequent malicious events. This difficulty is compounded as the dataset scales. Packet analyzers have a high memory requirement because they reassemble packet sessions and model layers of network protocols.  Other packet analysis tools, such as tcpdump and ngrep, do not create dependencies between packets and filter selected packets in a single pass. While these tools have a lower resource requirement, they are time-consuming on large datasets. 
+
+This paper presents a system to enable packet analyzers to analyze large datasets by using a distributed system. The system distributes a portion of the network data to each server, issues commands, and collects the results. A central server issues commands over SSH and transfers files using rsync to processing servers. This enables a collection of heterogeneous servers to rapidly divide a large network capture and run queries in parallel. The central server can adapt for differences in server resource capabilities and data by redistributing the chunks of data each server processes. This improves repeated queries against the same dataset. 
+
+The syntax of the queries are tshark, tcpdump, or ngrep commands. These tools have a robust filtering syntax that is well-known. Building upon widely used open-source tools enables reuse of optimized packet processing libraries and support for hundreds of protocols. This avoids the complication of translating network data to fit a specific query syntax.  
+
+The system is designed for a variety of use cases. One use case is to develop the query on a subset of the packet capture on a single machine and use the system to run the query against the full dataset.  Another use case is to filter a large dataset to produce output for a consuming analytic. The output can be sent using unix pipes to tools such as sort, uniq, or count. 
+
+The system can be implemented using a commercial cloud provider to add additional servers until the desired performance is reached. Alternatively, laptops could be transported to a client site as a tool for network incident response.
+
+\section*{Related Work}
+
+Several approaches have been developed to analyze traffic and monitor networks. One approach, commonly called netflow, is to reduce the size of the captured network data by storing the metadata. This metadata, such as listing source and destination IP addresses, can be analyzed for anomalies.  This approach requires prior knowledge of what is necessary to capture, and discards most network content. Intrusion Detection Systems (IDS), such as Snort, take a different approach by scanning traffic for pre-defined signatures. The open source Bro network security monitoring system combines a netflow approach with IDS-like functionality.  Other efforts, such as pcap2sql, translate relevant network events into a database. These approaches can provide insight into a network, but are limited by the requirement to know exactly what to extract from network traffic ahead of an event. 
+
+Other efforts have focused specifically on analyzing large network captures. Network traffic has limited dependencies and can be split into parallel workloads for servers to analyze individually.  Techniques from (cite lee and yeonhee) and (cite RIPE-CC) both use a Hadoop-based approach to distribute work among a number of servers.  (cites lee and yeonhee)'s system ingests netflow data and utilizes custom analytics for network statistics while (RIPE-CC) has developed a distributed DNS-based analytic and supports SQL-like queries against the captured data.  Both systems require the overhead and complexity of a Hadoop system, translation of the network data to an optimized format, and are tailored for specific analytic uses.  Packetpig is another effort that works on large network captures and utilizes Hadoop to run Apache Pig queries against captured traffic. 
+
+\section*{Methods and Design}
+
+The two primary functions of the system are distribute, and command. The distribute function splits the packet capture data among the processing servers. The command function executes the packet analysis query on each server.  All remote communications utilizes SSH public-private key pairs to provide authentication and a secure channel.  
+
+In the distribute function,  the central node splits the network packet captures into chunks which are distributed equally among the processing nodes.  A capture is split into 25 megabyte (MB) chunks. The chunk size is important because the memory requirment can be multiple of the files size on disk. This chunk size preformed well because limited resourced Virtual Machines were used.  Before files are distributed, the central server queries each processing server for files have already been distributed. Then, only files which have changed are transfered.  This allows for efficient repeated queries of a dataset that continues to grow. The distribution is made using the rsync program running over SSH, and compressed.     
+
+In the command function, the central node executes a tshark, ngrep, or tcpdump command on each processing node against the distributed data. The central server uses the provide command to build a bash for-loop that runs on each processing server. An SSH session is established with each processing server concurrently using the python threading library.  Each processing node executes the command against their local allotment of the network data and returns the output to the central server. The data is collected in a thread-safe data structure and sent to standard output in order of completion.
+
+In the load balancing function, the central server moves chunks between poorly performing servers and highly preforming servers.  The central node records the task completion time after a query.  If a processing node's completion time is 20 percent below the average completion times of all other servers, the central node calculates a proportional number of randomly selected files to transfer from a slow server to a fast server.  This balancing accomplishes two goals, utilizing more of high resourced servers and evening the distribution of sought-after network data throughout the cluster.  An example of sought-after data would be if a queries targets a specific network device, and traffic from this device only occurs in chunks of the network capture concentrated on one processing server.
+
+\section*{Evaluation} 
+
+A limitation to evaluating this effort was a lack of hardware to test the system at scale. The test were conducted using Virtual Machines (VM) each allocated 512 MB of RAM and a single core processor.  All VMs are hosted on an 8 GB RAM, quad-core Apple iMac. Since resources need to be reserved for the host operating sytem, a limited number of VMs can run at once.  Tests with more VMs running may have been more affected by competition for processor time, disk access, background activity of the host, and the overhead of running the VMs.
+
+With these constraints, the objective is to determine the degree of parallelism exhibited by the system to see if it could be implemented at scale. The system was configured to extract all dns queries out of a 695 MB packet capture in pcap format with different numbers of processing servers.  The load balancing technique was tried for repeated queries on the 4 and 8 server cluster. 
+
+\begin{verbatim}
+
+Test Cases
+
+(make table/chart)
+
+1 node
+node 0 in 383.662714958
+
+2 equal nodes
+node 0 in 180.446943998
+node 1 in 226.667176962
+speedup 1.6
+
+4 equal nodes
+node 0 in 109.422397852
+node 1 in 123.732256174
+node 2 in 127.157043934
+node 3 in 160.569280148
+speedup 2.3
+
+8 equal nodes
+node 0 in 43.2271559238
+node 1 in 63.0207438469
+node 2 in 77.6714920998
+node 3 in 83.6117560863
+node 4 in 89.0525529385
+node 5 in 96.5401399136
+node 6 in 105.154409885
+node 7 in 113.43266201
+speedup 3.38
+
+Need to test:
+Increase dataset size
+Reduction in standard deviation
+when using load balancing?
+
+3 equal nodes, 1 large node
+then do load balancing
+
+4 equal nodes, load balancing
+8 equal nodes, load balancing
+
+
+\end{verbatim}
+
+For a distributed system, the best performance would be a linear speedup.  This means that has the number of processing servers is doubled, the speedup would double. Speedup is defined as the execution time for a single server to complete the task divided by the execution time for the multiple server configuration.
+
+For this system there is less than linear speedup, as the speedup from doubling the nodes from 1 to 2 results in a speedup of 1.6 instead of an ideal speedup of 2.  The speedup does continue to increase as the number of processing nodes increases. One related factor to the less than ideal speedup is that node completion times are unbalanced. If there was a low standard deviation, the work load would be equally spread between the servers resulting in an overall lower completion time.  %The load balancing algorithm decrease the standard deviation of completion times for the 8 server cluster by RESULT.  The speedup factor increased by RESULT.
+These results provide encouragement that in spite of the testing hardware limitations, this technique would scale with dedicated hardware and larger datasets.
+
+However, there are underlying limitations of this system that could be improved.  As the system scales, the central node can become overwhelmed with network traffic as it becomes a hotspot with all traffic leaving and returning to it. There are also no provisions of the failure of a node.  A node failure will cause incomplete output.  The network files can be re-distributed to functioning nodes, but the running computation will be lost.  Another unaddressed issue is the possibility for the system may be overwhelmed by a multitude of results. The result of a query may overflow the bounded buffer that is transferring the result back to the central node.  
+
+\section*{Conclusion}
+
+This system has shown an ability to efficiently analyze large datasets of full network captures. This may enable different approaches in network management.  While an IDS may indicate the presence of an adversary in the network, in depth packet analysis may crucial to uncovering the details of damage done to the network.  An organization could augment existing network management practices by storing full network captures.  When unusal activity occours, the organization can look back to see exactly what happend on their network.  
+
+\end{multicols}
+\end{document}
