@@ -167,7 +167,6 @@ def create_split(drone_list, file_list):
         # TODO this math is way off
         split_size = str((total_file_size / number_of_drones) / 6)
 
-        print "Potentially fix this; setting file size to 25 MB chunks"
         split_size  = 25
 
         split(file_list, number_of_drones, split_size, max_chunk_file_size) 
@@ -222,6 +221,8 @@ def transfer_split_files(drone_list, chunked_file_list):
                            
         d = worker_pool.next()
 
+        time.sleep(1)
+        
         t = threading.Thread(target=transfer_thread, args = (d,fname))
         t.daemon = True
         t.start()
@@ -257,11 +258,12 @@ def read_existing_files(drone_list):
 def send_command(d, cmd, q):
     stdin, stdout, stderr = d.sshconn.exec_command(cmd)
     start_time = timeit.default_timer()
-    print "sent command " + str(d.ipaddress)
+    if VERBOSE:
+        print "[*] sent command " + str(d.ipaddress)
     result = stdout.read()
 
     d.completiontime = timeit.default_timer() - start_time
-    print "[*] finished " + str(d.ipaddress) + " in " + str(d.completiontime)
+    print "" + str(d.ipaddress) + ": " + str(d.completiontime)
     q.put(result)
 
         
@@ -376,8 +378,8 @@ def load_balance(drone_list):
             
                     
 def load_balance_transfer_thread(ds, df, fname):
-    if VERBOSE:
-        print "[*] transfering " + fname + " from " + ds.ipaddress + " to " + df.ipaddress
+    #if VERBOSE:
+    print "[*] transfering " + fname + " from " + ds.ipaddress + " to " + df.ipaddress
     subprocess.check_call(["rsync", "-avz", "-e", "ssh", ds.ssh_user + "@" + ds.ipaddress + ":" + DRONE_DIR + fname, "/tmp/" + fname], stdout=subprocess.PIPE)
 
     stdin, stdout, stderr = ds.sshconn.exec_command("rm " + DRONE_DIR + fname)
@@ -432,7 +434,8 @@ def main():
         # Create Drone
         drone_list.append(Drone(ip))
 
-    print "starting drone setup"
+    if VERBOSE:
+        print "[*] starting drone setup"
     # Threaded setup
     thread_list = []
     for d in drone_list:
