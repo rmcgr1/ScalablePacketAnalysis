@@ -13,6 +13,7 @@ Options:
 --host <host>         Hostname or IP address.
 --user <username>     Username to ssh 
 --balance             Enable load balancing.  Shifts data from poorly performing to nodes to high performing ones
+--balancethreshold <threshold>    Percent difference between nodes to attempt to correct (default .10).  Lower value, higher performance, more transfers
 
 Example:
 
@@ -63,6 +64,7 @@ import timeit
 DRONE_DIR = "/tmp/packet_analysis/"
 #HOST_LIST = ['192.168.2.100', '192.168.2.101', '192.168.2.102', '192.168.2.103']
 VERBOSE = False
+OUTPUT = True
 
 class Drone:
     def __init__(self, ipaddress):
@@ -218,9 +220,16 @@ def transfer_split_files(drone_list, chunked_file_list):
         if [fname.split('/')[-1], str(os.path.getsize(fname))] in distributed_files:
             # This file is already out on a drone
             continue
+
                            
         d = worker_pool.next()
 
+        if VERBOSE:
+            print "[*] transfering " + fname + " to " + d.ipaddress
+        subprocess.check_call(["rsync", "-avz", "-e", "ssh", fname, d.ssh_user + "@" + d.ipaddress + ":" + DRONE_DIR], stdout=subprocess.PIPE)
+        d.filelist.append(fname)
+
+'''
         time.sleep(1)
         
         t = threading.Thread(target=transfer_thread, args = (d,fname))
@@ -230,7 +239,7 @@ def transfer_split_files(drone_list, chunked_file_list):
 
     for t in thread_list:
         t.join()
-
+'''
     
 # Remove files to be transfered if they exist out on a drone
 def read_existing_files(drone_list):
@@ -263,11 +272,17 @@ def send_command(d, cmd, q):
     result = stdout.read()
 
     d.completiontime = timeit.default_timer() - start_time
-    print "" + str(d.ipaddress) + ": " + str(d.completiontime)
+    #print "" + str(d.ipaddress) + ": " + str(d.completiontime)
+    if OUTPUT:
+        print str(d.completiontime)+", ",
     q.put(result)
 
         
 def distribute_command(drone_list, cmd):
+
+    if OUTPUT:
+        print str(len(drone_list))+",", 
+    
     q = Queue.Queue()
     thread_list = []
     for d in drone_list:
@@ -316,7 +331,7 @@ def sanitize_command(cmd, name = None):
 # Load Balancing
 ###
 
-def load_balance(drone_list):
+def load_balance(drone_list, threshold):
 
 
     #Populate d.filelist()
@@ -331,9 +346,6 @@ def load_balance(drone_list):
     
     slower = []
     faster = []
-    threshold = .10
-
-
 
     for d in drone_list:
         if d.completiontime > average + average * threshold:
@@ -348,7 +360,7 @@ def load_balance(drone_list):
     slower.sort(key=operator.attrgetter("completiontime"), reverse=True)
     faster.sort(key=operator.attrgetter("completiontime"), reverse=False)
 
-    pdb.set_trace()
+    #pdb.set_trace()
         
     # Make lists same size, favoring slower ones
     if len(faster) > len(slower):
@@ -417,6 +429,8 @@ def main():
 
     arguments = docopt(usage)
 
+    #print arguments
+    
     ssh_user = arguments['--user']
 
     host_list = []
@@ -463,7 +477,8 @@ def main():
         # Prepare captures
         chunked_file_list = create_split(drone_list, file_list)
         transfer_split_files(drone_list, chunked_file_list)
-
+        os.system("rm /Users/irish/Development/ScalablePacketAnalysis/captures/*chunk*")
+        
         if VERBOSE:
             print "[*] Finished transfering files to drones"
 
@@ -486,8 +501,12 @@ def main():
 
         distribute_command(drone_list, cmd)
 
+        
         if arguments["--balance"]:
-            load_balance(drone_list)
+            threshold = .10
+            if arguments["--balancethreshold"]:
+                threshold = arguments["--balancethreshold"] 
+            load_balance(drone_list, threshold)
         
         
         
