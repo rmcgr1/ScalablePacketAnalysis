@@ -163,7 +163,6 @@ def create_split(drone_list, file_list):
         if VERBOSE:
             print "Good to seperate files upto this size: " + str(total_file_size / number_of_drones)
             
-
         # Have to get the size of each chunk, especially if ealing with multiple various sized files
         # Punting on problem by splitting each file into 1/numofdrones
         # TODO this math is way off
@@ -347,6 +346,7 @@ def load_balance(drone_list, threshold):
     slower = []
     faster = []
 
+    
     for d in drone_list:
         if d.completiontime > average + average * threshold:
             slower.append(d)
@@ -354,20 +354,26 @@ def load_balance(drone_list, threshold):
             faster.append(d)
 
     if len(slower) == 0 or len(faster) == 0:
+        # Just for gathering results
+        print "No need to continue balancing"
+        sys.exit(0)
         return
-            
-    #These sorts are not going to work
+
+    
     slower.sort(key=operator.attrgetter("completiontime"), reverse=True)
     faster.sort(key=operator.attrgetter("completiontime"), reverse=False)
 
+    
     #pdb.set_trace()
         
     # Make lists same size, favoring slower ones
     if len(faster) > len(slower):
-        faster = faster[0:len(slower)-1]        
+        faster = faster[0:len(slower)]        
     if len(slower) > len(faster):
-        slower = slower[0:len(faster)-1]
+        slower = slower[0:len(faster)]
 
+
+        
     # see if this matches the slowest going to the fastest
     for i in range(len(slower)): 
         ds = slower[i]
@@ -376,6 +382,7 @@ def load_balance(drone_list, threshold):
         num_files_to_transfer = int(math.ceil((ds.completiontime - average) / ds.time_per_file()))
         shuffle(ds.filelist)
 
+        
         thread_list = []
         for i in range(num_files_to_transfer):
             t = threading.Thread(target=load_balance_transfer_thread, args = (ds, df, ds.filelist[i]))
@@ -505,7 +512,7 @@ def main():
         if arguments["--balance"]:
             threshold = .10
             if arguments["--balancethreshold"]:
-                threshold = arguments["--balancethreshold"] 
+                threshold = float(arguments["--balancethreshold"])
             load_balance(drone_list, threshold)
         
         
