@@ -1,4 +1,5 @@
 \documentclass{article}
+\usepackage[margin={4cm,4cm}]{geometry}
 \usepackage{multicol}
 
 \begin{document}
@@ -39,51 +40,89 @@ Other efforts have focused specifically on analyzing large network captures. Net
 
 \section*{Methods and Design}
 
-The two primary functions of the system are distribute, and command. The distribute function splits the packet capture data among the processing servers. The command function executes the packet analysis query on each server.  All remote communications utilizes SSH public-private key pairs to provide authentication and a secure channel.  
+The three primary components of the system are the distribute function, the command function, and the load balancing function. The distribute function splits the packet capture data among the processing servers. The command function executes the packet analysis query on each server.  All remote communications utilizes SSH public-private key pairs to provide authentication and a secure channel.  
 
-In the distribute function,  the central node splits the network packet captures into chunks which are distributed equally among the processing nodes.  A capture is split into 25 megabyte (MB) chunks. The chunk size is important because the memory requirment can be multiple of the files size on disk. This chunk size preformed well because limited resourced Virtual Machines were used.  Before files are distributed, the central server queries each processing server for files have already been distributed. Then, only files which have changed are transfered.  This allows for efficient repeated queries of a dataset that continues to grow. The distribution is made using the rsync program running over SSH, and compressed.     
+In the distribute function,  the central node splits the network packet captures into chunks which are distributed equally among the processing nodes.  A capture is split into 25 megabyte (MB) chunks. The chunk size is important because the memory requirment can be multiple of the files size on disk. This chunk size was selected because it preformed well with the limited resourced Virtual Machines that were used in development.  Before files are distributed, the central server queries each processing server for files have already been distributed. Then, only files which have changed are transfered.  This allows for efficient repeated queries of a dataset that continues to grow. The distribution is made using the rsync program running over SSH, and compressed.  Chunks are distributed in a round-robin method so if a single portion of the capture is more complex to analyze, there is a chance that it is distributed equally among the processing servers.      
 
 In the command function, the central node executes a tshark, ngrep, or tcpdump command on each processing node against the distributed data. The central server uses the provide command to build a bash for-loop that runs on each processing server. An SSH session is established with each processing server concurrently using the python threading library.  Each processing node executes the command against their local allotment of the network data and returns the output to the central server. The data is collected in a thread-safe data structure and sent to standard output in order of completion.
 
-In the load balancing function, the central server moves chunks between poorly performing servers and highly preforming servers.  The central node records the task completion time after a query.  If a processing node's completion time is 20 percent below the average completion times of all other servers, the central node calculates a proportional number of randomly selected files to transfer from a slow server to a fast server.  This balancing accomplishes two goals, utilizing more of high resourced servers and evening the distribution of sought-after network data throughout the cluster.  An example of sought-after data would be if a queries targets a specific network device, and traffic from this device only occurs in chunks of the network capture concentrated on one processing server.
+In the load balancing function, the central server moves chunks between poorly performing servers and highly preforming servers to lower the disparity in completion times between nodes, and lower the overall task compltion time.  The central node records the task completion time for each node after a query.  If a processing node's completion time is above a user-specified percentage threshold of the average completion time of the system, the central node marks it as a slow server. If below the threshold, it is marked as a fast server.  The central node calculates a proportional number of randomly selected files to transfer from slow servers to fast servers. The number of files to transfer from the slow server is calculated by finding the average time expended per file.  Then the difference between the system average completion time and the server's completion time is divided by this time per file to find the number of files to tranfer. The randomly selected files from the slowest server are transfered to the fastest server.  The process is repeated with the second slowest and fastest servers, and so on, until there is not a pair of servers that performed outside of the threshold.  Transferring files in proportion to the difference from the average completion time attepts to get servers preforming closer to the average completion time quickly.  This accomplishes two goals, utilizing more of high resourced servers and leveling the distribution of sought-after network data throughout the cluster.  An example of sought-after data would be if a queries targets a specific network device, and traffic from this device only occurs in chunks of the network capture concentrated on a processing server.  Eventually, these sought-after chunks will be distributed among a greater number of nodes. 
 
 \section*{Evaluation} 
 
-A limitation to evaluating this effort was a lack of hardware to test the system at scale. The test were conducted using Virtual Machines (VM) each allocated 512 MB of RAM and a single core processor.  All VMs are hosted on an 8 GB RAM, quad-core Apple iMac. Since resources need to be reserved for the host operating sytem, a limited number of VMs can run at once.  Tests with more VMs running may have been more affected by competition for processor time, disk access, background activity of the host, and the overhead of running the VMs.
 
-With these constraints, the objective is to determine the degree of parallelism exhibited by the system to see if it could be implemented at scale. The system was configured to extract all dns queries out of a 695 MB packet capture in pcap format with different numbers of processing servers.  The load balancing technique was tried for repeated queries on the 4 and 8 server cluster. 
+The objective is to determine the degree of parallelism exhibited by the system to see if it could be implemented at scale. The system was configured to extract all dns queries out of a 695 MB packet capture with different numbers of processing servers.  Each processing server was identical, and load balancing technique was run on repeated queries for the 4 and 8 server trials. 
 
-\begin{verbatim}
+A limitation to evaluating this effort was a lack of hardware to test the system at scale. The test were conducted using Virtual Machines (VM) each allocated 512 MB of RAM and a single core processor.  All VMs are hosted on an 8 GB RAM, quad-core Apple iMac. Since resources need to be reserved for the host operating sytem, a limited number of VMs can run at once.  Tests with more VMs running can be affected by competition for processor time, disk access, background activity of the host, and the overhead of running the VMs.
 
-Test Cases
+Figure () shows the completion times for ten queries with differnt numbers of processing servers.  The completetion time decreases as the number of nodes increases, until more than 4 servers are used.  This could be the limit where overhead of running more than 4 VMs affected the running time.  Another factor could be that since the host machine has a quad core processor, running four concurrent tshark queries is the limit ()()
 
-(make table/chart)
 
-1 node
-node 0 in 383.662714958
 
-2 equal nodes
-node 0 in 180.446943998
-node 1 in 226.667176962
-speedup 1.6
+Figure () shows the speedup and effeciency of each option.
 
-4 equal nodes
-node 0 in 109.422397852
-node 1 in 123.732256174
-node 2 in 127.157043934
-node 3 in 160.569280148
-speedup 2.3
 
-8 equal nodes
-node 0 in 43.2271559238
-node 1 in 63.0207438469
-node 2 in 77.6714920998
-node 3 in 83.6117560863
-node 4 in 89.0525529385
-node 5 in 96.5401399136
-node 6 in 105.154409885
-node 7 in 113.43266201
-speedup 3.38
+
+
+\begin{tabular}{llr}
+\hline
+\multicolumn{2}{c}{Speedup} \\
+\cline{1-2}
+Servers    & Speedup & Efficiency  \\
+\hline
+1     &  1  & 1   \\
+2     &   1.77  & .88  \\
+4     &   2.73  & .68 \\
+4 (balance) & 2.97 & .74     \\
+8 &  2.89   & .36  \\
+8 (balance) & 2.93 & .36      \\
+\hline
+\end{tabular}
+
+
+
+
+
+Figure () standardeviation
+
+
+Figure () dataset.
+
+
+\begin{tabular}{llr}
+\hline
+\multicolumn{2}{c}{Speedup} \\
+\cline{1-2}
+Size & 695 MB \\
+Records & 27 \\
+Sum & 17604 \\
+Average & 653 \\ 
+Standard Deviation & 526.83 \\
+Median & 419 \\
+Max & 2393 \\
+Min & 80 \\
+\hline
+\end{tabular}
+
+
+
+For a distributed system, the best performance would be a linear speedup.  This means that has the number of processing servers is doubled, the speedup would double. Speedup is defined as the execution time for a single server to complete the task divided by the execution time for the multiple server configuration.
+
+For this system there is less than linear speedup, as the speedup from doubling the nodes from 1 to 2 results in a speedup of 1.6 instead of an ideal speedup of 2.  The speedup does continue to increase as the number of processing nodes increases. One related factor to the less than ideal speedup is that node completion times are unbalanced. If there was a low standard deviation, the work load would be equally spread between the servers resulting in an overall lower completion time.  %The load balancing algorithm decrease the standard deviation of completion times for the 8 server cluster by RESULT.  The speedup factor increased by RESULT.
+These results provide encouragement that in spite of the testing hardware limitations, this technique would scale with dedicated hardware and larger datasets.
+
+However, there are underlying limitations of this system that could be improved.  As the system scales, the central node can become overwhelmed with network traffic as it becomes a hotspot with all traffic leaving and returning to it. There are also no provisions of the failure of a node.  A node failure will cause incomplete output.  The network files can be re-distributed to functioning nodes, but the running computation will be lost.  Another unaddressed issue is the possibility for the system may be overwhelmed by a multitude of results. The result of a query may overflow the bounded buffer that is transferring the result back to the central node.  
+
+
+
+
+
+Ideas - 3,5,6,7 numbers of servers?
+Lopsided server
+
+
+
+
 
 Need to test:
 Increase dataset size
@@ -97,14 +136,8 @@ then do load balancing
 8 equal nodes, load balancing
 
 
-\end{verbatim}
 
-For a distributed system, the best performance would be a linear speedup.  This means that has the number of processing servers is doubled, the speedup would double. Speedup is defined as the execution time for a single server to complete the task divided by the execution time for the multiple server configuration.
 
-For this system there is less than linear speedup, as the speedup from doubling the nodes from 1 to 2 results in a speedup of 1.6 instead of an ideal speedup of 2.  The speedup does continue to increase as the number of processing nodes increases. One related factor to the less than ideal speedup is that node completion times are unbalanced. If there was a low standard deviation, the work load would be equally spread between the servers resulting in an overall lower completion time.  %The load balancing algorithm decrease the standard deviation of completion times for the 8 server cluster by RESULT.  The speedup factor increased by RESULT.
-These results provide encouragement that in spite of the testing hardware limitations, this technique would scale with dedicated hardware and larger datasets.
-
-However, there are underlying limitations of this system that could be improved.  As the system scales, the central node can become overwhelmed with network traffic as it becomes a hotspot with all traffic leaving and returning to it. There are also no provisions of the failure of a node.  A node failure will cause incomplete output.  The network files can be re-distributed to functioning nodes, but the running computation will be lost.  Another unaddressed issue is the possibility for the system may be overwhelmed by a multitude of results. The result of a query may overflow the bounded buffer that is transferring the result back to the central node.  
 
 \section*{Conclusion}
 
