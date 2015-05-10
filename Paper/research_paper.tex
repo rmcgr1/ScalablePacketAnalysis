@@ -75,21 +75,17 @@ A limitation to evaluating this effort was a lack of hardware to test the system
 
 Figure () shows the completion times for ten repeated queries with different numbers of processing servers.  The completion time decreases as the number of nodes increases, until more than 4 servers are used.  At this point, the overhead outpaces any gains from adding more nodes to divide the work.  This limit could be the result of of running more than 4 VMs affected the running time.  Since the host machine has a quad core processor, running more than four VMs causes contention for CPU resouces and increases the completion time.
 
-Examining the performance of the four server cluster, figure () show the differnce in completion time when using the load balancing technique.  The green, broken line, shows the performance of four servers with randomly distributed chunks. The blue, solid line, shows the performance when the load balancing algorithm is applied after one query with the random distribution of chunks.  After the first query there is a decrease in completinon time.  The load balancing algorithm can make a data swap that adversaly effects the running time because the average cost per file is calculated rather than knowing the actual cost. However, once effective swaps are made that brings the running time within the specified 10 percent threshold, the algorithm stops transfers until the threshold is breached.  Another metric of the load balancing algorithm is the standard deviation of the individual server completion times. Figure () shows the standard deviation in server completion times when using four servers and eight servers.  Without load balancing, there is a realtively constant standard deviation.  With load balancing, the standard deviation after the first query is reduced which results in a lower overall task completion time.  
+Examining the performance of the four server cluster, figure () show the differnce in completion time when using the load balancing technique.  The green, broken line, shows the performance of four servers with randomly distributed chunks. The blue, solid line, shows the performance when the load balancing algorithm is applied after one query with the random distribution of chunks.  After the first query there is a decrease in completinon time.  The load balancing algorithm can make a data swap that adversaly effects the running time because the average cost per file is calculated rather than knowing the actual cost. However, once effective swaps are made that brings the running time within the specified 10 percent threshold, the algorithm stops transfers until the threshold is breached.  The performance of the load balancing algorithm can be measured by the standard deviation of the individual server completion times. Figure () shows the standard deviation in server completion times when using four servers and eight servers.  Without load balancing, there is a realtively constant standard deviation.  The effectivness of the load balancing is seen in the reduction of the standard deviation after the first query.  This reduction results in a lower overall task completion time.  
 
 
-For a distributed system, the best performance would be a linear speedup.  This means that has the number of processing servers is doubled, the speedup would double. Speedup is defined as the execution time for a single server to complete the task divided by the execution time for the multiple server configuration.  For this system there is less than linear speedup, as the speedup from doubling the nodes from 1 to 2 results in a speedup of 1.77 instead of an ideal speedup of 2.  Figure () shows a table of the speedup and efficiency results.  Efficentcy is a metric that represents the utiliztion of each server by diving the speedup factor by the number of servers.  An efficentcy of 1 would indicate perfect speedup.  Figure () shows the efficentcy per node as the number of servers increases.  The blue, broken line shows the efficiency of the system with a random distribution of data to the servers, while the green, solid line represents the effeciency when using the load balancing algorithm.  The load balancing algorithm increases the efficentcy of the system as 
+When adding capacity to a distributed system, the best performance is linear speedup.  This means that as the number of processing servers is doubled, the speedup would double. Speedup is defined as the execution time for a single server to complete the task divided by the execution time for the multiple server configuration.  For this system there is less than linear speedup, as the speedup from doubling the nodes from 1 to 2 results in a speedup of 1.77 instead of an ideal speedup of 2.  Figure () shows a table of the speedup and efficiency results.  Efficentcy is a metric that represents the utiliztion of each server by diving the speedup factor by the number of servers.  An efficentcy of 1 would indicate perfect speedup.  Figure () shows the efficentcy per node as the number of servers increases.  The blue, broken line shows the efficiency of the system with a random distribution of data to the servers, while the green, solid line represents the effeciency when using the load balancing algorithm.  The load balancing algorithm increases the efficentcy of the system over a random distribution, but both approaches decline past the limit of four servers.
 
-
-The speedup does continue to increase as the number of processing nodes increases. One related factor to the less than ideal speedup is that node completion times are unbalanced. If there was a low standard deviation, the work load would be equally spread between the servers resulting in an overall lower completion time.  %The load balancing algorithm decrease the standard deviation of completion times for the 8 server cluster by RESULT.  The speedup factor increased by RESULT.
 These results provide encouragement that in spite of the testing hardware limitations, this technique would scale with dedicated hardware and larger datasets.
 
 
-
-
-
-
-Figure () shows a table of the speedup and effeciency of each option.
+The speedup does continue to increase as the number of processing nodes increases. One related factor to the less than ideal speedup is that node completion times are unbalanced. If there was a low standard deviation, the work load would be equally spread between the servers resulting in an overall lower completion time.  %The load balancing algorithm decrease the standard deviation of completion times for the 8 server cluster by RESULT.  The speedup factor increased by RESULT.
+These results provide encouragement that in spite of the testing hardware limitations, this technique would scale with dedicated hardware and larger d
+atasets.
 
 
 
@@ -109,57 +105,13 @@ Servers    & Speedup & Efficiency  \\
 \hline
 \end{tabular}
 
-Finger () Efficentcy
 
-Effect of load balancing()
-Standard dev of completion times with load balancing
-
-
-Figure () standardeviation
-
-
-Figure () dataset.
-
-
-
-
-
-For a distributed system, the best performance would be a linear speedup.  This means that has the number of processing servers is doubled, the speedup would double. Speedup is defined as the execution time for a single server to complete the task divided by the execution time for the multiple server configuration.
-
-For this system there is less than linear speedup, as the speedup from doubling the nodes from 1 to 2 results in a speedup of 1.6 instead of an ideal speedup of 2.  The speedup does continue to increase as the number of processing nodes increases. One related factor to the less than ideal speedup is that node completion times are unbalanced. If there was a low standard deviation, the work load would be equally spread between the servers resulting in an overall lower completion time.  %The load balancing algorithm decrease the standard deviation of completion times for the 8 server cluster by RESULT.  The speedup factor increased by RESULT.
-These results provide encouragement that in spite of the testing hardware limitations, this technique would scale with dedicated hardware and larger datasets.
-
-However, there are underlying limitations of this system that could be improved.  As the system scales, the central node can become overwhelmed with network traffic as it becomes a hotspot with all traffic leaving and returning to it. There are also no provisions of the failure of a node.  A node failure will cause incomplete output.  The network files can be re-distributed to functioning nodes, but the running computation will be lost.  Another unaddressed issue is the possibility for the system may be overwhelmed by a multitude of results. The result of a query may overflow the bounded buffer that is transferring the result back to the central node.  
-
-
-
-
-
-Ideas - 3,5,6,7 numbers of servers?
-Lopsided server
-
-
-
-
-
-Need to test:
-Increase dataset size
-Reduction in standard deviation
-when using load balancing?
-
-3 equal nodes, 1 large node
-then do load balancing
-
-4 equal nodes, load balancing
-8 equal nodes, load balancing
-
-
-
+There are limitations of this system that were not addressed in this effort.  As the system scales, the central node can become overwhelmed with network traffic as it becomes a hotspot with all traffic leaving and returning to it. One extension could have nodes assisting with data transfer in a peer-to-peer arrangiment instead all transfers originating with the central node.  Another would be to handle node failures. One way would be to track the files that were on the failed node and to re-distributed them to a functioning node.  Another issue is the possibility for the system may be overwhelmed by a multitude of results. The result of a query may overflow the bounded buffer that is transferring the result back to the central node.   
 
 
 \section*{Conclusion}
 
-This system has shown an ability to efficiently analyze large datasets of full network captures. This may enable different approaches in network management.  While an IDS may indicate the presence of an adversary in the network, in depth packet analysis may crucial to uncovering the details of damage done to the network.  An organization could augment existing network management practices by storing full network captures.  When unusal activity occours, the organization can look back to see exactly what happend on their network.  
+This system can efficiently analyze large network captures. This ability may enable different approaches in network management.  While an IDS may indicate the presence of an adversary in the network, in depth packet analysis is crucial to uncovering the details of damage done to the network.  An organization could augment existing network management practices by storing full network captures.  When unusal activity occours, the organization can look back to see exactly what happend on their network.  
 
 \end{multicols}
 \end{document}
