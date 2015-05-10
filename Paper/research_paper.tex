@@ -51,15 +51,45 @@ In the load balancing function, the central server moves chunks between poorly p
 \section*{Evaluation} 
 
 
-The objective is to determine the degree of parallelism exhibited by the system to see if it could be implemented at scale. The system was configured to extract all dns queries out of a 695 MB packet capture with different numbers of processing servers.  Each processing server was identical, and load balancing technique was run on repeated queries for the 4 and 8 server trials. 
+The objective is to determine the degree of parallelism exhibited by parallelizing this operation and specifically to evaluate the effectivness of the load balancing technique. The system is configured to extract all DNS queries out of a 695 MB packet capture with different numbers of processing servers.  Each processing server is identical.  The dataset is split into 26 chunks, however the time to process each chunk is not equal.  Since the query only considers DNS traffic the amount of DNS traffic is the deciding factor as  other traffic can be discarded quickly.  Figure () shows the relevant statistics of the dataset.  The load balancing technique exploits this high disparity between chunks.  
+
+\begin{tabular}{llr}
+\hline
+\multicolumn{2}{c}{Speedup} \\
+\cline{1-2}
+Size & 695 MB \\
+Records & 27 \\
+Sum & 17604 \\
+Average & 653 \\ 
+Standard Deviation & 526.83 \\
+Median & 419 \\
+Max & 2393 \\
+Min & 80 \\
+\hline
+\end{tabular}
+
+
+
 
 A limitation to evaluating this effort was a lack of hardware to test the system at scale. The test were conducted using Virtual Machines (VM) each allocated 512 MB of RAM and a single core processor.  All VMs are hosted on an 8 GB RAM, quad-core Apple iMac. Since resources need to be reserved for the host operating sytem, a limited number of VMs can run at once.  Tests with more VMs running can be affected by competition for processor time, disk access, background activity of the host, and the overhead of running the VMs.
 
-Figure () shows the completion times for ten queries with differnt numbers of processing servers.  The completetion time decreases as the number of nodes increases, until more than 4 servers are used.  This could be the limit where overhead of running more than 4 VMs affected the running time.  Another factor could be that since the host machine has a quad core processor, running four concurrent tshark queries is the limit ()()
+Figure () shows the completion times for ten repeated queries with different numbers of processing servers.  The completion time decreases as the number of nodes increases, until more than 4 servers are used.  At this point, the overhead outpaces any gains from adding more nodes to divide the work.  This limit could be the result of of running more than 4 VMs affected the running time.  Since the host machine has a quad core processor, running more than four VMs causes contention for CPU resouces and increases the completion time.
+
+Examining the performance of the four server cluster, figure () show the differnce in completion time when using the load balancing technique.  The green, broken line, shows the performance of four servers with randomly distributed chunks. The blue, solid line, shows the performance when the load balancing algorithm is applied after one query with the random distribution of chunks.  After the first query there is a decrease in completinon time.  The load balancing algorithm can make a data swap that adversaly effects the running time because the average cost per file is calculated rather than knowing the actual cost. However, once effective swaps are made that brings the running time within the specified 10 percent threshold, the algorithm stops transfers until the threshold is breached.  Another metric of the load balancing algorithm is the standard deviation of the individual server completion times. Figure () shows the standard deviation in server completion times when using four servers and eight servers.  Without load balancing, there is a realtively constant standard deviation.  With load balancing, the standard deviation after the first query is reduced which results in a lower overall task completion time.  
+
+
+For a distributed system, the best performance would be a linear speedup.  This means that has the number of processing servers is doubled, the speedup would double. Speedup is defined as the execution time for a single server to complete the task divided by the execution time for the multiple server configuration.  For this system there is less than linear speedup, as the speedup from doubling the nodes from 1 to 2 results in a speedup of 1.77 instead of an ideal speedup of 2.  Figure () shows a table of the speedup and efficiency results.  Efficentcy is a metric that represents the utiliztion of each server by diving the speedup factor by the number of servers.  An efficentcy of 1 would indicate perfect speedup.  Figure () shows the efficentcy per node as the number of servers increases.  The blue, broken line shows the efficiency of the system with a random distribution of data to the servers, while the green, solid line represents the effeciency when using the load balancing algorithm.  The load balancing algorithm increases the efficentcy of the system as 
+
+
+The speedup does continue to increase as the number of processing nodes increases. One related factor to the less than ideal speedup is that node completion times are unbalanced. If there was a low standard deviation, the work load would be equally spread between the servers resulting in an overall lower completion time.  %The load balancing algorithm decrease the standard deviation of completion times for the 8 server cluster by RESULT.  The speedup factor increased by RESULT.
+These results provide encouragement that in spite of the testing hardware limitations, this technique would scale with dedicated hardware and larger datasets.
 
 
 
-Figure () shows the speedup and effeciency of each option.
+
+
+
+Figure () shows a table of the speedup and effeciency of each option.
 
 
 
@@ -79,8 +109,10 @@ Servers    & Speedup & Efficiency  \\
 \hline
 \end{tabular}
 
+Finger () Efficentcy
 
-
+Effect of load balancing()
+Standard dev of completion times with load balancing
 
 
 Figure () standardeviation
@@ -89,20 +121,6 @@ Figure () standardeviation
 Figure () dataset.
 
 
-\begin{tabular}{llr}
-\hline
-\multicolumn{2}{c}{Speedup} \\
-\cline{1-2}
-Size & 695 MB \\
-Records & 27 \\
-Sum & 17604 \\
-Average & 653 \\ 
-Standard Deviation & 526.83 \\
-Median & 419 \\
-Max & 2393 \\
-Min & 80 \\
-\hline
-\end{tabular}
 
 
 
