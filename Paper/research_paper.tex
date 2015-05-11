@@ -1,7 +1,12 @@
 \documentclass{article}
 \usepackage[margin={2cm,2cm}]{geometry}
-\usepackage{multicol}
+\usepackage{multicol,caption}
 \usepackage{graphicx}
+
+\newenvironment{Figure}
+               {\par\medskip\noindent\minipage{\linewidth}}
+               {\endminipage\par\medskip}
+
 
 \begin{document}
 
@@ -54,6 +59,10 @@ The load balancing algorithm minimizes the disparity in completion times between
 
 The objective is to determine the degree of parallelism exhibited by this system and specifically to evaluate the efficentcy of the load balancing algorithm. The query extracts all DNS queries out of a 695 MB packet capture and is evaluated by varying the number of nodes, and the effectiveness of the load balancing algortihm.  The dataset is split into 26 chunks, however the time to process each chunk is not equal.  Since the query only considers DNS traffic the amount of DNS traffic is the crtical factor for execution time as other traffic can be discarded quickly.  Figure () shows the relevant statistics of the dataset which was determined by counting the DNS entries per chunk.  There is a large standard deviation between chunks that can cause unequal running times on each processing server.qD
 
+
+\begin{Figure}
+   \centering
+\noindent\makebox[\linewidth]{
 \begin{tabular}{llr}
 \hline
 \multicolumn{2}{c}{Dataset Statistics} \\
@@ -68,41 +77,71 @@ Max & 2393 \\
 Min & 80 \\
 \hline
 \end{tabular}
+}
+\captionof{figure}{}
+\end{Figure}
 
 
 The tests were conducted using Virtual Machines (VM) allocated 512 MB of RAM and a single core processor. The ''large'' VMs were alocated 1GB of RAM.  All VMs are hosted on an 8 GB RAM, quad-core Apple iMac. Since resources need to be reserved for the host operating sytem, a limited number of VMs can run at once.  Tests with more VMs running can be affected by competition for processor time, disk access, background activity of the host, and the overhead of running the VMs.  This is a limitation to evaluating this system as an ideal evaluation would use a large number of dedicated servers to test the system at scale.
 
 Figure () shows the task completion times for ten repeated queries with different numbers of processing servers.  The completion time decreases as the number of nodes increases, until more than four servers are used. The load balancing algoritm contributes to a decreased completion time until after the four server configuration.  At this point, for both approaches, the overhead outpaces any gains from adding more nodes to divide the work.  This limit could be the result of of running more than four VMs affected the running time.  Since the host machine has a quad core processor, running more than four VMs could contention on CPU core and increases the completion time.
 
-\noindent\makebox[\linewidth]{\includegraphics[width=\linewidth]{CompletionTime.pdf}}
+\begin{Figure}
+  \centering
+  \noindent\makebox[\linewidth]{\includegraphics[width=\linewidth]{CompletionTime.pdf}}
+  \captionof{figure}{}
+\end{Figure}
 
 Examining the performance of the four server cluster, figure () show the differnce in completion time when using the load balancing technique.  The green, broken line, shows the performance of four servers with randomly distributed chunks. The blue, solid line, shows the performance when the load balancing algorithm is applied after one query with the random distribution of chunks.  After the first query there is a marked decrease in completinon time which generally persists for repeated queries.  The completion time with load balancing is 17.1 percent less than the average completion time without load balancing.  However, the algorithm can make a data tranfer that adversaly effects the running time because only the average cost per chunk is calculated rather than knowing the actual cost per chunk. This means an ineffcent transfer can be made, but the algorithm will self correct on the next iteration attempting to reach the threshold. Once achieved, the algorithm stops transfers until the threshold is breached. One theoritical negative situation would be if a chunk wasoverwhelmingly computationally expensive that after each query, the algorithm would continually moving this chunk from server to servers without reaching the desired threshold.  While this situation was not encountered during testing, a smaller chunk size would split this computationally expensive data and be effectively distributed across servers by the load balancing algortihm. 
 
-\noindent\makebox[\linewidth]{\includegraphics[width=\linewidth]{LoadBalancingEffect.pdf}}
+\begin{Figure}
+  \centering
+  \noindent\makebox[\linewidth]{\includegraphics[width=\linewidth]{LoadBalancingEffect.pdf}}
+  \captionof{figure}{}
+\end{Figure}
+
 
 Another measurement of the load balancing algorithm is seen in the figure (), the standard deviation of the individual server completion times when using four servers and eight servers.  Without load balancing, there is a realtively constant standard deviation.  The effectivness of the load balancing is seen in the reduction of the standard deviation after the first query.  This reduction results in a lower overall task completion time which is seen in Fig ().
 
-\noindent\makebox[\linewidth]{\includegraphics[width=\linewidth]{StandardDeviation.pdf}}
+\begin{Figure}
+  \centering
+  \noindent\makebox[\linewidth]{\includegraphics[width=\linewidth]{StandardDeviation.pdf}}
+  \captionof{figure}{}
+\end{Figure}
 
 When adding addtional processing capacity to a distributed system, the best performance is called linear speedup.  This means that as the number of processing servers is doubled, the speedup would double. Speedup is defined as the execution time for a single server to complete the task divided by the execution time for the multiple server configuration.  For this system there is a less than linear speedup, and loss of improved perfomance after four nodes.  Figure () shows a table of the speedup and efficiency results.  Efficentcy is a metric that represents the utiliztion percentage of each server by diving the speedup factor by the number of servers.  An efficentcy of 1 would indicate perfect speedup.
 
-\begin{tabular}{llr}
-\multicolumn{3}{c}{} \\
-\cline{1-3}
-Servers    & Speedup & Efficiency  \\
+\begin{Figure}
+   \centering
+\noindent\makebox[\linewidth]{
+\begin{tabular}{lrrrr}
+\multicolumn{5}{c}{} \\
+\cline{1-5}
+Servers    & Speedup &  & Efficiency &  \\
 \hline
-1     &  1  & 1   \\
-2     &   1.77  & .88  \\
-4     &   2.73  & .68 \\
-4 (balance) & 2.97 & .74     \\
-8 &  2.89   & .36  \\
-8 (balance) & 2.93 & .36      \\
+ & Normal & Balanced & Normal & Balanced \\
+\hline
+1&1&1&1&1 \\
+2&1.78&1.98&.89&.99 \\
+3&2.49&2.79&.83&.93 \\
+4&2.74&3.09&.70&.86 \\ 
+5&3.22&3.22&.64&.68 \\
+6&2.80&2.80&.47&.56 \\
+7&2.94&2.94&.42&.46 \\
+8&2.89&2.89&.36&.37 \\
 \hline
 \end{tabular}
+}
+\captionof{figure}{}
+\end{Figure}
 
 Figure () shows the efficentcy per node as the number of servers increases.  The blue, broken line shows the efficiency of the system with a random distribution of data to the servers, while the green, solid line represents the increased effeciency when using the load balancing algorithm.  The load balancing algorithm increases the efficentcy of the system over a random distribution, but again, this approach is ineffective past the limit of four servers.
 
-\noindent\makebox[\linewidth]{\includegraphics[width=\linewidth]{Efficiency.pdf}}
+\begin{Figure}
+  \centering
+  \noindent\makebox[\linewidth]{\includegraphics[width=\linewidth]{Efficiency.pdf}}
+  \captionof{figure}{}
+\end{Figure}
 
 
 In spite of the testing hardware limitations these results provide encouragement that the parallization and load balancing techniques would scale with dedicated hardware and larger datasets.
